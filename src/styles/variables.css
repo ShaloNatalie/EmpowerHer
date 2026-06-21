@@ -1,0 +1,43 @@
+:root {
+  /* Zine / Editorial Color Palette */
+  --paper: #F8EEF0;
+  --paper-deep: #F0DCE3;
+  --ink: #241318;
+  
+  /* Primary deep berry tones */
+  --oxblood: #7A1638;
+  --oxblood-deep: #530F26;
+  
+  /* Hot pink accent/CTA */
+  --coral: #E0356F;
+  
+  /* Supporting tones */
+  --rose: #E6AFC3;
+  --mustard: #B5447A;
+  
+  /* Dividers and borders */
+  --line: rgba(36, 19, 24, 0.16);
+  
+  /* Semantic mappings for consistency */
+  --primary: var(--oxblood);
+  --primary-hover: var(--oxblood-deep);
+  --background: var(--paper);
+  --text-primary: var(--ink);
+  --text-secondary: rgba(36, 19, 24, 0.7);
+  
+  --border-radius-sm: 0px; /* Zine layout uses sharp borders */
+  --border-radius-md: 0px;
+  --border-radius-lg: 0px;
+  --border-radius-pill: 0px;
+  
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.25s ease;
+  
+  --font-display: 'Fraunces', serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'Space Mono', monospace;
+}

@@ -1,0 +1,241 @@
+/* Dashboard Template Styles */
+
+.dashboard-notice {
+  background: repeating-linear-gradient(135deg, var(--paper-deep) 0 10px, var(--paper) 10px 20px);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--mustard);
+  padding: 13px 18px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  margin-bottom: 30px;
+}
+.dashboard-notice b {
+  font-family: var(--font-mono), monospace;
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--oxblood-deep);
+  display: block;
+  margin-bottom: 3px;
+}
+
+.dashboard-masthead-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 26px;
+}
+
+.dashboard-greeting {
+  font-family: var(--font-display), serif;
+  font-weight: 500;
+  font-size: 42px;
+  margin: 0;
+  letter-spacing: -.01em;
+}
+.dashboard-greeting em {
+  font-style: italic;
+  color: var(--oxblood);
+}
+.dashboard-greeting-sub {
+  font-size: 14px;
+  opacity: .6;
+  margin: 6px 0 0;
+  max-width: 480px; /* adjusted slightly for content balance */
+}
+
+/* Hero with torn bottom edge */
+.dashboard-hero-wrap {
+  position: relative;
+  margin-bottom: 46px;
+}
+.dashboard-hero {
+  background: var(--oxblood);
+  color: var(--paper);
+  padding: 38px 40px 50px;
+  clip-path: polygon(0 0, 100% 0, 100% 92%, 97% 100%, 93% 91%, 89% 100%, 85% 92%, 81% 100%, 77% 91%, 73% 100%, 69% 92%, 65% 100%, 61% 91%, 57% 100%, 53% 92%, 49% 100%, 45% 91%, 41% 100%, 37% 92%, 33% 100%, 29% 91%, 25% 100%, 21% 92%, 17% 100%, 13% 91%, 9% 100%, 5% 92%, 1% 100%, 0 92%);
+}
+.dashboard-hero-eyebrow {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--rose);
+  margin: 0 0 10px;
+}
+.dashboard-hero h2 {
+  font-family: var(--font-display), serif;
+  font-weight: 500;
+  font-size: 30px;
+  margin: 0 0 12px;
+  max-width: 520px;
+  color: var(--paper);
+}
+.dashboard-hero p {
+  font-size: 14.5px;
+  line-height: 1.6;
+  max-width: 480px;
+  color: rgba(244, 236, 222, 0.85);
+  margin: 0 0 26px;
+}
+.dashboard-hero-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--coral);
+  color: #fff;
+  border: none;
+  font-family: var(--font-mono), monospace;
+  font-size: 12.5px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: 14px 24px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.dashboard-hero-cta::after {
+  content: "→";
+  font-family: var(--font-body), sans-serif;
+}
+
+.dashboard-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.dashboard-section-head h3 {
+  font-family: var(--font-display), serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 24px;
+  margin: 0;
+  color: var(--ink);
+}
+.dashboard-section-head .rule {
+  flex: 1;
+  border-top: 1px solid var(--line);
+}
+.dashboard-section-head .tag {
+  font-family: var(--font-mono), monospace;
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  color: var(--ink);
+  opacity: .45;
+  text-transform: uppercase;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  border-left: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+  margin-bottom: 50px;
+}
+.dashboard-card {
+  position: relative;
+  padding: 24px 22px 22px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+.dashboard-card:hover {
+  background: var(--paper-deep);
+}
+.dashboard-card .no {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  color: var(--coral);
+  position: absolute;
+  top: 18px;
+  right: 20px;
+}
+.dashboard-card h4 {
+  font-family: var(--font-display), serif;
+  font-weight: 600;
+  font-size: 17px;
+  margin: 0 0 9px;
+  padding-right: 26px;
+  color: var(--ink);
+}
+.dashboard-card p {
+  font-size: 13px;
+  line-height: 1.55;
+  opacity: .7;
+  margin: 0;
+  color: var(--ink);
+}
+.dashboard-card .corner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 14px;
+  height: 14px;
+  background: var(--mustard);
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+.dashboard-card.alt .corner {
+  background: var(--coral);
+}
+.dashboard-card.alt2 .corner {
+  background: var(--oxblood);
+}
+
+.dashboard-quote {
+  text-align: center;
+  padding: 38px 60px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  margin-top: 40px;
+}
+.dashboard-quote p {
+  font-family: var(--font-display), serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 22px;
+  line-height: 1.5;
+  margin: 0;
+  color: var(--oxblood-deep);
+}
+.dashboard-quote span {
+  display: block;
+  font-family: var(--font-mono), monospace;
+  font-size: 10.5px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  opacity: .5;
+  margin-top: 12px;
+  font-style: normal;
+  color: var(--ink);
+}
+
+/* Responsive Overrides */
+@media (max-width: 1024px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-masthead-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .dashboard-greeting {
+    font-size: 32px;
+  }
+  .dashboard-quote {
+    padding: 24px 20px;
+  }
+  .dashboard-hero {
+    padding: 30px 20px 40px;
+  }
+}

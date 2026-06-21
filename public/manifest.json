@@ -1,0 +1,18 @@
+{
+  "short_name": "EmpowerHer",
+  "name": "EmpowerHer: Breast Cancer Awareness & Self-Exam Guide",
+  "description": "Educational breast cancer awareness and guided self-examination tool for women in underserved Kenyan communities.",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#d81b60",
+  "background_color": "#ffffff",
+  "orientation": "portrait-primary"
+}

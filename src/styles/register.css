@@ -1,0 +1,261 @@
+/* Register Page Specific Styling */
+
+.register-wrap {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: var(--paper);
+}
+
+/* Left : editorial panel */
+.register-left {
+  background: var(--oxblood);
+  color: var(--paper);
+  position: relative;
+  overflow: hidden;
+  padding: 48px 56px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.register-masthead {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 26px;
+  margin: 0;
+}
+
+.register-masthead em {
+  font-style: italic;
+  color: var(--coral);
+  font-weight: 500;
+}
+
+.register-masthead-mark {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--rose);
+  margin: 0 0 8px;
+}
+
+.register-left-body {
+  max-width: 420px;
+}
+
+.register-left-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--rose);
+  margin: 0 0 14px;
+}
+
+.register-left-headline {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 38px;
+  line-height: 1.12;
+  margin: 0 0 18px;
+  color: var(--paper);
+}
+
+.register-left-headline em {
+  font-style: italic;
+  color: var(--rose);
+  font-weight: 500;
+}
+
+.register-left-dek {
+  font-size: 15px;
+  line-height: 1.65;
+  color: rgba(248, 238, 240, 0.82);
+  margin: 0;
+}
+
+.register-left-list {
+  border-top: 1px solid rgba(248, 238, 240, 0.25);
+  padding-top: 20px;
+  margin-top: 30px;
+}
+
+.register-left-list .item {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.register-left-list .item .no {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--rose);
+  min-width: 20px;
+  padding-top: 2px;
+}
+
+.register-left-list .item h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  margin: 0 0 3px;
+  color: var(--paper);
+}
+
+.register-left-list .item p {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: rgba(248, 238, 240, 0.72);
+  margin: 0;
+}
+
+.register-left::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: -1px;
+  width: 18px;
+  height: 100%;
+  background: var(--oxblood);
+  clip-path: polygon(100% 0, 100% 4%, 80% 8%, 100% 12%, 80% 16%, 100% 20%, 80% 24%, 100% 28%, 80% 32%, 100% 36%, 80% 40%, 100% 44%, 80% 48%, 100% 52%, 80% 56%, 100% 60%, 80% 64%, 100% 68%, 80% 72%, 100% 76%, 80% 80%, 100% 84%, 80% 88%, 100% 92%, 80% 96%, 100% 100%, 0 100%, 0 0);
+}
+
+/* Right : form card */
+.register-right {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 40px;
+}
+
+.register-form-card {
+  width: 100%;
+  max-width: 360px;
+}
+
+.register-form-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 28px;
+  margin: 0 0 6px;
+}
+
+.register-form-sub {
+  font-size: 13.5px;
+  opacity: 0.6;
+  margin: 0 0 28px;
+}
+
+.register-field {
+  margin-bottom: 18px;
+}
+
+.register-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.register-field label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--oxblood-deep);
+  margin-bottom: 7px;
+}
+
+.register-field input {
+  width: 100%;
+  border: none;
+  border-bottom: 1.5px solid var(--line);
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 15px;
+  padding: 8px 2px;
+  color: var(--ink);
+  outline: none;
+}
+
+.register-field input:focus {
+  border-bottom-color: var(--coral);
+}
+
+.register-field input::placeholder {
+  color: rgba(36, 19, 24, 0.35);
+}
+
+.register-hint {
+  font-size: 11px;
+  color: var(--ink);
+  opacity: 0.45;
+  margin-top: 5px;
+}
+
+.register-terms {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  font-size: 12.5px;
+  line-height: 1.5;
+  opacity: 0.8;
+  margin: 6px 0 24px;
+}
+
+.register-terms input {
+  margin-top: 2px;
+  accent-color: var(--coral);
+}
+
+.register-terms a {
+  color: var(--oxblood);
+  border-bottom: 1px dotted var(--oxblood);
+  text-decoration: none;
+}
+
+.register-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 24px 0;
+}
+
+.register-divider .rule {
+  flex: 1;
+  border-top: 1px solid var(--line);
+}
+
+.register-divider span {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.45;
+}
+
+.register-signin-line {
+  text-align: center;
+  font-size: 13.5px;
+  opacity: 0.75;
+  margin-top: 20px;
+}
+
+.register-signin-line a {
+  color: var(--oxblood);
+  font-weight: 500;
+  text-decoration: none;
+  border-bottom: 1px solid var(--oxblood);
+}
+
+@media (max-width: 760px) {
+  .register-wrap {
+    grid-template-columns: 1fr;
+  }
+  .register-left {
+    display: none;
+  }
+}

@@ -1,0 +1,88 @@
+/* Zine Layout Responsive Breakpoints */
+
+.zine-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  border-left: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+}
+
+.zine-grid .zine-card {
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+/* Tablet Layout (min-width: 768px) */
+@media (min-width: 768px) {
+  .zine-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .main-content {
+    padding: 30px 48px;
+    max-width: 900px;
+    margin: 0 auto;
+    width: 100%;
+  }
+}
+
+/* PC/Desktop Layout (min-width: 1024px) */
+@media (min-width: 1024px) {
+  .zine-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  .zine-grid .zine-card:nth-child(3n) {
+    border-right: none;
+  }
+  
+  .app-container-with-sidebar {
+    flex-direction: row !important;
+    display: grid !important;
+    grid-template-columns: 230px 1fr;
+    max-width: 1400px;
+    margin: 0 auto;
+    box-shadow: none;
+    border: none;
+  }
+  
+  .app-container-fluid {
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .desktop-header-hide {
+    display: none !important;
+  }
+
+  .sidebar-navigation {
+    display: flex !important;
+    flex-direction: column;
+    width: 230px;
+    background-color: var(--paper);
+    border-right: 1px solid var(--line);
+    padding: 34px 26px 30px;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+
+  .main-content {
+    max-width: 100%;
+    margin: 0;
+    padding: 30px 48px 60px;
+    height: 100vh;
+    overflow-y: auto;
+  }
+}
+
+.hide-desktop {
+  display: block;
+}
+
+@media (min-width: 1024px) {
+  .hide-desktop {
+    display: none !important;
+  }
+}
