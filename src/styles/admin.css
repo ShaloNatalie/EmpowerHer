@@ -226,6 +226,121 @@ textarea {
   opacity: 0.5;
 }
 
+/* summary cards */
+.summary-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  border: 1px solid var(--line);
+  margin-bottom: 30px;
+}
+
+.sum-card {
+  padding: 20px 16px;
+  border-right: 1px solid var(--line);
+  position: relative;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--paper);
+}
+
+.summary-row .sum-card:last-child {
+  border-right: none;
+}
+
+.sum-card .corner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 12px;
+  height: 12px;
+  background: var(--mustard);
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+
+.sum-card.alt .corner {
+  background: var(--coral);
+}
+
+.sum-card.alt2 .corner {
+  background: var(--oxblood);
+}
+
+.sum-card .label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  opacity: .5;
+  margin: 4px 0 0;
+  order: 2;
+}
+
+.sum-card .value {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 32px;
+  margin: 0;
+  color: var(--oxblood);
+  order: 1;
+}
+
+.sum-card .value.flag {
+  color: var(--coral);
+}
+
+/* feedback cards */
+.fb-card {
+  border: 1px solid var(--line);
+  padding: 18px 20px;
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  background-color: var(--paper);
+}
+
+.fb-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--oxblood);
+  margin: 0 0 5px;
+}
+
+.fb-comment {
+  font-size: 13.5px;
+  opacity: .75;
+  margin: 0 0 6px;
+  line-height: 1.5;
+}
+
+.fb-meta {
+  font-size: 12px;
+  opacity: .5;
+}
+
+.fb-right {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.table-wrap {
+  border: 1px solid var(--line);
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 1024px) {
+  .summary-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 @media (max-width: 880px) {
   .admin-grid {
     grid-template-columns: 1fr;
@@ -243,4 +358,17 @@ textarea {
   .bento-card.wide {
     grid-column: span 1;
   }
+  .summary-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .sum-card:nth-child(2n) {
+    border-right: none;
+  }
+  .fb-card {
+    flex-direction: column;
+  }
+  .fb-right {
+    text-align: left;
+  }
 }
+
