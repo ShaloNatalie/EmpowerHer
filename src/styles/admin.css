@@ -372,3 +372,149 @@ textarea {
   }
 }
 
+/* mockup style extensions for content page */
+.toolbar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.filters input[type="text"], .filters select {
+  border: 1px solid var(--line);
+  background: #fff;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  padding: 10px 12px;
+  outline: none;
+}
+
+.filters input[type="text"] {
+  min-width: 220px;
+}
+
+.choice-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.choice {
+  border: 1.5px solid var(--line);
+  padding: 9px 14px;
+  font-size: 13.5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background-color: var(--paper);
+}
+
+.choice input {
+  accent-color: var(--coral);
+  cursor: pointer;
+}
+
+.empty {
+  text-align: center;
+  padding: 60px 20px;
+  border: 1px dashed var(--line);
+  background-color: var(--paper);
+}
+
+.empty h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+
+.empty p {
+  font-size: 14px;
+  opacity: .65;
+  max-width: 340px;
+  margin: 0 auto 22px;
+}
+
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(36, 19, 24, .45);
+  align-items: center;
+  justify-content: center;
+  z-index: 1500;
+}
+
+.modal-overlay.show {
+  display: flex;
+}
+
+.modal {
+  background: var(--paper);
+  max-width: 380px;
+  width: 90%;
+  padding: 30px;
+  border: 1.5px solid var(--ink);
+  box-shadow: 4px 4px 0px var(--ink);
+}
+
+.modal h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 19px;
+  margin: 0 0 10px;
+  color: var(--ink);
+}
+
+.modal p {
+  font-size: 14px;
+  opacity: .7;
+  line-height: 1.55;
+  margin: 0 0 24px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.modal-actions button {
+  flex: 1;
+}
+
+.demo-switch {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.demo-switch button {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  border: 1px solid var(--line);
+  background: transparent;
+  padding: 8px 12px;
+  cursor: pointer;
+  opacity: .6;
+  color: var(--ink);
+}
+
+.demo-switch button.on {
+  border-color: var(--coral);
+  color: var(--coral);
+  opacity: 1;
+  font-weight: bold;
+}
+
+

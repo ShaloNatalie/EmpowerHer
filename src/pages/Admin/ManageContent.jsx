@@ -16,11 +16,13 @@ const ManageContent = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Active View Tab State: 'list' | 'form' | 'empty'
+  const [currentView, setCurrentView] = useState('list');
+
   // Search & Filtering State
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
-  const [sortBy, setSortBy] = useState('newest');
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -29,8 +31,9 @@ const ManageContent = () => {
   // Toast notification state
   const [toast, setToast] = useState(null);
 
-  // Modal State
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // Modals state
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedArticle, setSelectedArticle] = useState(null);
 
@@ -40,15 +43,13 @@ const ManageContent = () => {
   const [formSummary, setFormSummary] = useState('');
   const [formContentBody, setFormContentBody] = useState('');
   const [formTags, setFormTags] = useState('');
-  const [formReadTime, setFormReadTime] = useState('5');
+  const [formReadTime, setFormReadTime] = useState('4 minute read');
   const [formAuthor, setFormAuthor] = useState('Admin Staff');
   const [formPublished, setFormPublished] = useState(false);
   
   // Media uploads
-  const [featuredImage, setFeaturedImage] = useState(null);
   const [featuredImageUrl, setFeaturedImageUrl] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [additionalImages, setAdditionalImages] = useState([]);
   const [galleryUrls, setGalleryUrls] = useState([]);
   const [uploadingGallery, setUploadingGallery] = useState(false);
 
@@ -72,10 +73,15 @@ const ManageContent = () => {
     try {
       const data = await fetchArticles();
       setArticles(data);
+      if (data.length === 0) {
+        setCurrentView('empty');
+      } else {
+        setCurrentView('list');
+      }
       setError(null);
     } catch (err) {
       console.error("Error fetching articles:", err);
-      setError("Failed to load educational content. Please try again.");
+      setError("Failed to load educational content.");
       showToast("Error loading articles", "error");
     } finally {
       setLoading(false);
@@ -90,10 +96,10 @@ const ManageContent = () => {
     setToast({ message, type });
     setTimeout(() => {
       setToast(null);
-    }, 4000);
+    }, 4500);
   };
 
-  // Handle image upload to storage
+  // Upload featured image
   const handleFeaturedImageChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -110,7 +116,7 @@ const ManageContent = () => {
     }
   };
 
-  // Handle gallery images upload
+  // Upload gallery images
   const handleGalleryImagesChange = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -125,13 +131,13 @@ const ManageContent = () => {
       showToast(`${urls.length} gallery images uploaded!`);
     } catch (err) {
       console.error(err);
-      showToast("Failed to upload some gallery images", "error");
+      showToast("Failed to upload gallery images", "error");
     } finally {
       setUploadingGallery(false);
     }
   };
 
-  // Rich text helper insertion
+  // Formatting insert
   const insertFormatting = (before, after = '') => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -142,20 +148,22 @@ const ManageContent = () => {
     const replacement = before + selected + after;
     setFormContentBody(text.substring(0, start) + replacement + text.substring(end));
     
-    // Maintain focus & selection
     setTimeout(() => {
       textarea.focus();
       textarea.setSelectionRange(start + before.length, start + before.length + selected.length);
     }, 50);
   };
 
-  // Save or Update Article
+  // Form Submit
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     if (!formTitle.trim()) {
       showToast("Title is required", "error");
       return;
     }
+
+    // Parse reading time to integer if possible, default to 4
+    const numericReadTime = parseInt(formReadTime.replace(/[^0-9]/g, ''), 10) || 4;
 
     const payload = {
       title: formTitle,
@@ -165,12 +173,11 @@ const ManageContent = () => {
       mediaURL: featuredImageUrl || 'https://images.unsplash.com/photo-1579684389782-64d84b5e9053?w=500',
       gallery: galleryUrls,
       tags: formTags.split(',').map(tag => tag.trim()).filter(Boolean),
-      readingTime: parseInt(formReadTime, 10) || 5,
+      readingTime: numericReadTime,
       author: formAuthor,
       published: formPublished
     };
 
-    // Optimistic UI state updates
     const prevArticles = [...articles];
 
     try {
@@ -182,7 +189,7 @@ const ManageContent = () => {
             : art
         );
         setArticles(updated);
-        setIsModalOpen(false);
+        setCurrentView('list');
         showToast("Article updated successfully!");
         
         await updateArticle(selectedArticle.id, payload);
@@ -191,7 +198,7 @@ const ManageContent = () => {
         const tempId = `temp-${Date.now()}`;
         const newArt = { id: tempId, ...payload, views: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
         setArticles([newArt, ...articles]);
-        setIsModalOpen(false);
+        setCurrentView('list');
         showToast("Article created successfully!");
         
         const actualId = await addArticle(payload);
@@ -204,7 +211,7 @@ const ManageContent = () => {
     }
   };
 
-  // Open Edit Modal
+  // Open Edit Form
   const startEdit = (article) => {
     setSelectedArticle(article);
     setFormTitle(article.title || '');
@@ -212,15 +219,15 @@ const ManageContent = () => {
     setFormSummary(article.summary || '');
     setFormContentBody(article.contentBody || '');
     setFormTags(article.tags?.join(', ') || '');
-    setFormReadTime(String(article.readingTime || 5));
+    setFormReadTime(article.readingTime ? `${article.readingTime} minute read` : '4 minute read');
     setFormAuthor(article.author || 'Admin Staff');
     setFormPublished(article.published || false);
     setFeaturedImageUrl(article.mediaURL || '');
     setGalleryUrls(article.gallery || []);
-    setIsModalOpen(true);
+    setCurrentView('form');
   };
 
-  // Open Create Modal
+  // Open Create Form
   const startCreate = () => {
     setSelectedArticle(null);
     setFormTitle('');
@@ -228,26 +235,42 @@ const ManageContent = () => {
     setFormSummary('');
     setFormContentBody('');
     setFormTags('');
-    setFormReadTime('5');
+    setFormReadTime('4 minute read');
     setFormAuthor('Admin Staff');
     setFormPublished(false);
     setFeaturedImageUrl('');
     setGalleryUrls([]);
-    setIsModalOpen(true);
+    setCurrentView('form');
   };
 
-  // Delete Article
-  const handleDeleteArticle = async (id) => {
-    if (!window.confirm("Are you sure you want to permanently delete this article? This action cannot be undone.")) {
-      return;
-    }
+  // Trigger Delete Confirmation Modal
+  const triggerDelete = (id) => {
+    setDeleteTargetId(id);
+    setIsDeleteModalOpen(true);
+  };
 
+  // Close Delete Modal
+  const closeDelete = () => {
+    setDeleteTargetId(null);
+    setIsDeleteModalOpen(false);
+  };
+
+  // Confirmed Delete
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
+    
     const prevArticles = [...articles];
-    setArticles(articles.filter(art => art.id !== id));
+    const updatedArticles = articles.filter(art => art.id !== deleteTargetId);
+    setArticles(updatedArticles);
+    closeDelete();
     showToast("Article deleted successfully.");
 
+    if (updatedArticles.length === 0) {
+      setCurrentView('empty');
+    }
+
     try {
-      await deleteArticle(id);
+      await deleteArticle(deleteTargetId);
     } catch (err) {
       console.error(err);
       setArticles(prevArticles); // Rollback
@@ -280,55 +303,24 @@ const ManageContent = () => {
     }
   };
 
-  // Toggle Publish Status
-  const togglePublishStatus = async (article) => {
-    const updated = articles.map(art => 
-      art.id === article.id ? { ...art, published: !art.published } : art
-    );
-    setArticles(updated);
-    showToast(article.published ? "Article unpublished (draft)" : "Article published!");
-
-    try {
-      await updateArticle(article.id, { published: !article.published });
-    } catch (err) {
-      console.error(err);
-      setArticles(articles); // Reset
-      showToast("Failed to update status", "error");
-    }
-  };
-
-  // Open Preview View Modal
   const viewArticleDetails = (article) => {
     setSelectedArticle(article);
     setIsViewModalOpen(true);
   };
 
-  // Stats computation (using local array state)
-  const totalArticles = articles.length;
-  const publishedCount = articles.filter(art => art.published).length;
-  const draftCount = totalArticles - publishedCount;
-  const totalViews = articles.reduce((sum, art) => sum + (art.views || 0), 0);
-
-  // Search & Filter & Sort Processing
-  const processedArticles = articles
-    .filter(art => {
-      const matchesSearch = art.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        art.summary?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        art.author?.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesCategory = filterCategory === 'All' || art.category === filterCategory;
-      const matchesStatus = filterStatus === 'All' || 
-        (filterStatus === 'Published' && art.published) || 
-        (filterStatus === 'Draft' && !art.published);
-      
-      return matchesSearch && matchesCategory && matchesStatus;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'newest') return new Date(b.createdAt) - new Date(a.createdAt);
-      if (sortBy === 'oldest') return new Date(a.createdAt) - new Date(b.createdAt);
-      if (sortBy === 'alpha') return a.title.localeCompare(b.title);
-      return 0;
-    });
+  // Search & Filters processing
+  const processedArticles = articles.filter(art => {
+    const matchesSearch = art.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      art.summary?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      art.author?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesCategory = filterCategory === 'All' || art.category === filterCategory;
+    const matchesStatus = filterStatus === 'All' || 
+      (filterStatus === 'Published' && art.published) || 
+      (filterStatus === 'Draft' && !art.published);
+    
+    return matchesSearch && matchesCategory && matchesStatus;
+  });
 
   // Pagination processing
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -339,7 +331,7 @@ const ManageContent = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', position: 'relative' }}>
       
-      {/* Toast Notification */}
+      {/* Toast Notification Banner */}
       {toast && (
         <div style={{
           position: 'fixed',
@@ -360,271 +352,422 @@ const ManageContent = () => {
       )}
 
       {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '15px' }}>
-        <div>
-          <p className="eyebrow">Admin Portal</p>
-          <h2 className="h1">Manage <em>Educational Content</em></h2>
-          <p className="dek">Write and publish medical awareness resources for the client app.</p>
-        </div>
-        <button className="btn btn-sm btn-primary" onClick={startCreate} style={{ width: 'auto' }}>
-          Add New Article
+      <div>
+        <p className="eyebrow">Admin / A2</p>
+        <h2 className="h1">Manage Educational <em>Content</em></h2>
+        <p className="dek">Create and update breast health awareness articles shown to users.</p>
+      </div>
+
+      {/* Demo Switch Tabs */}
+      <div className="demo-switch">
+        <button 
+          className={currentView === 'list' ? 'on' : ''} 
+          onClick={() => setCurrentView(articles.length === 0 ? 'empty' : 'list')}
+        >
+          Article list
+        </button>
+        <button 
+          className={currentView === 'form' ? 'on' : ''} 
+          onClick={() => {
+            if (!selectedArticle) startCreate();
+            setCurrentView('form');
+          }}
+        >
+          Add / edit article
+        </button>
+        <button 
+          className={currentView === 'empty' ? 'on' : ''} 
+          onClick={() => setCurrentView('empty')}
+        >
+          Empty state
         </button>
       </div>
 
-      {/* Dashboard Metrics Grid */}
-      <div className="admin-grid" style={{ marginBottom: '10px' }}>
-        <div className="admin-card">
-          <h3>{loading ? '...' : totalArticles}</h3>
-          <span>Total Articles</span>
-        </div>
-        <div className="admin-card">
-          <h3>{loading ? '...' : publishedCount}</h3>
-          <span>Published</span>
-        </div>
-        <div className="admin-card">
-          <h3>{loading ? '...' : draftCount}</h3>
-          <span>Drafts</span>
-        </div>
-        <div className="admin-card" style={{ borderRight: 'none' }}>
-          <h3>{loading ? '...' : totalViews.toLocaleString()}</h3>
-          <span>Total Views</span>
-        </div>
-      </div>
-
-      {/* Search and Filters Panel */}
-      <div style={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: '12px',
-        backgroundColor: 'var(--paper-deep)',
-        padding: '15px',
-        border: '1px solid var(--line)',
-        alignItems: 'center'
-      }}>
-        <div style={{ flex: '1 1 250px' }}>
-          <input
-            type="text"
-            className="input-field"
-            placeholder="Search title, summary, author..."
-            value={searchTerm}
-            onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-            style={{ backgroundColor: 'var(--paper)', border: '1px solid var(--line)' }}
-          />
-        </div>
-
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', width: '100%', flex: '2 1 auto', justifyContent: 'flex-end' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', minWidth: '120px' }}>
-            <span style={{ fontSize: '9px', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', marginBottom: '3px', opacity: 0.7 }}>Category</span>
-            <select
-              value={filterCategory}
-              onChange={(e) => { setFilterCategory(e.target.value); setCurrentPage(1); }}
-              style={{ padding: '6px', border: '1px solid var(--line)', fontFamily: 'var(--font-mono)', fontSize: '11px', background: 'var(--paper)' }}
-            >
-              <option value="All">All Categories</option>
-              {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-            </select>
+      {/* VIEW: ARTICLE LIST */}
+      {currentView === 'list' && (
+        <div className="view show" id="view-list">
+          {/* Filters and search toolbar */}
+          <div className="toolbar">
+            <div className="filters">
+              <input 
+                type="text" 
+                placeholder="Search articles..." 
+                value={searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+              />
+              <select 
+                value={filterCategory} 
+                onChange={(e) => { setFilterCategory(e.target.value); setCurrentPage(1); }}
+              >
+                <option value="All">All categories</option>
+                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select 
+                value={filterStatus} 
+                onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
+              >
+                <option value="All">All statuses</option>
+                <option value="Published">Published</option>
+                <option value="Draft">Draft</option>
+              </select>
+            </div>
+            <button className="btn-primary" onClick={startCreate}>Add new article</button>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', minWidth: '100px' }}>
-            <span style={{ fontSize: '9px', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', marginBottom: '3px', opacity: 0.7 }}>Status</span>
-            <select
-              value={filterStatus}
-              onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
-              style={{ padding: '6px', border: '1px solid var(--line)', fontFamily: 'var(--font-mono)', fontSize: '11px', background: 'var(--paper)' }}
-            >
-              <option value="All">All Status</option>
-              <option value="Published">Published</option>
-              <option value="Draft">Draft</option>
-            </select>
-          </div>
+          {/* Table Container */}
+          {loading ? (
+            <div style={{ padding: '20px', textAlign: 'center', opacity: 0.6 }}>Loading articles...</div>
+          ) : currentItems.length === 0 ? (
+            <div style={{ padding: '20px', textAlign: 'center', opacity: 0.6 }}>No matching articles found.</div>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Category</th>
+                    <th>Status</th>
+                    <th>Last updated</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentItems.map((article) => (
+                    <tr key={article.id} style={{ opacity: article.id.startsWith('temp-') ? 0.6 : 1 }}>
+                      <td style={{ fontWeight: '600' }}>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <img src={article.mediaURL} alt="Thumb" style={{ width: '30px', height: '30px', objectFit: 'cover', border: '1px solid var(--line)' }} />
+                          <span>{article.title}</span>
+                        </div>
+                      </td>
+                      <td>{article.category}</td>
+                      <td>
+                        <span className={`pill ${article.published ? 'pub' : 'draft'}`}>
+                          {article.published ? 'Published' : 'Draft'}
+                        </span>
+                      </td>
+                      <td>
+                        {article.updatedAt ? new Date(article.updatedAt).toLocaleDateString() : 'N/A'}
+                      </td>
+                      <td>
+                        <div className="row-actions">
+                          <button onClick={() => viewArticleDetails(article)}>View</button>
+                          <button onClick={() => startEdit(article)} disabled={article.id.startsWith('temp-')}>Edit</button>
+                          <button onClick={() => handleDuplicate(article)} disabled={article.id.startsWith('temp-')}>Clone</button>
+                          <button className="danger" onClick={() => triggerDelete(article.id)} disabled={article.id.startsWith('temp-')}>Delete</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', minWidth: '120px' }}>
-            <span style={{ fontSize: '9px', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', marginBottom: '3px', opacity: 0.7 }}>Sort By</span>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              style={{ padding: '6px', border: '1px solid var(--line)', fontFamily: 'var(--font-mono)', fontSize: '11px', background: 'var(--paper)' }}
-            >
-              <option value="newest">Newest First</option>
-              <option value="oldest">Oldest First</option>
-              <option value="alpha">Alphabetical</option>
-            </select>
-          </div>
-        </div>
-      </div>
+          {/* Pagination Controls */}
+          {processedArticles.length > itemsPerPage && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginTop: '15px'
+            }}>
+              <span style={{ fontSize: '12px', opacity: 0.7, fontFamily: 'var(--font-mono)' }}>
+                Showing {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, processedArticles.length)} of {processedArticles.length}
+              </span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  className="btn btn-sm btn-secondary"
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  style={{ width: 'auto', minHeight: '34px', padding: '6px 12px' }}
+                >
+                  Previous
+                </button>
+                <span style={{ display: 'flex', alignItems: 'center', padding: '0 10px', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  className="btn btn-sm btn-secondary"
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  style={{ width: 'auto', minHeight: '34px', padding: '6px 12px' }}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
 
-      {/* Main Articles Content List */}
-      {loading ? (
-        // Skeleton loader
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {[1, 2, 3, 4].map(n => (
-            <div key={n} style={{
-              height: '70px',
-              backgroundColor: 'var(--paper-deep)',
-              border: '1px solid var(--line)',
-              animation: 'pulse 1.5s infinite ease-in-out'
-            }}></div>
-          ))}
-        </div>
-      ) : currentItems.length === 0 ? (
-        // Empty state
-        <div style={{
-          border: '1px dashed var(--line)',
-          padding: '50px 20px',
-          textAlign: 'center',
-          backgroundColor: 'var(--paper)'
-        }}>
-          <span style={{ fontSize: '3rem', display: 'block', marginBottom: '10px' }}>📖</span>
-          <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '20px', marginBottom: '5px' }}>No Articles Found</h3>
-          <p style={{ opacity: 0.7, fontSize: '13.5px' }}>Change your filters or create a new article to get started.</p>
-        </div>
-      ) : (
-        <div className="table-container">
-          <table className="custom-table">
-            <thead>
-              <tr>
-                <th style={{ width: '60px' }}>Thumb</th>
-                <th>Title & Author</th>
-                <th>Category</th>
-                <th style={{ width: '90px' }}>Status</th>
-                <th style={{ width: '120px' }}>Updated</th>
-                <th style={{ width: '80px', textAlign: 'center' }}>Views</th>
-                <th style={{ width: '180px', textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {currentItems.map((article) => (
-                <tr key={article.id} style={{ opacity: article.id.startsWith('temp-') ? 0.6 : 1 }}>
-                  <td>
-                    <img 
-                      src={article.mediaURL} 
-                      alt="Thumbnail" 
-                      style={{
-                        width: '45px',
-                        height: '45px',
-                        objectFit: 'cover',
-                        border: '1px solid var(--line)'
-                      }}
-                    />
-                  </td>
-                  <td>
-                    <div style={{ fontWeight: '600', fontSize: '14.5px', color: 'var(--ink)' }}>{article.title}</div>
-                    <span style={{ fontSize: '11px', opacity: 0.6, fontFamily: 'var(--font-mono)' }}>By {article.author}</span>
-                  </td>
-                  <td>
-                    <span style={{
-                      backgroundColor: 'var(--paper-deep)',
-                      padding: '2px 6px',
-                      fontSize: '11px',
-                      fontFamily: 'var(--font-mono)',
-                      color: 'var(--oxblood)'
-                    }}>{article.category}</span>
-                  </td>
-                  <td>
-                    <button 
-                      onClick={() => togglePublishStatus(article)}
-                      disabled={article.id.startsWith('temp-')}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        padding: 0
-                      }}
-                    >
-                      <span className={`status-pill ${article.published ? 'status-active' : 'status-pending'}`} style={{
-                        backgroundColor: article.published ? '#d1fae5' : '#fef3c7',
-                        color: article.published ? '#065f46' : '#92400e',
-                        padding: '3px 8px',
-                        fontSize: '10.5px',
-                        fontFamily: 'var(--font-mono)',
-                        textTransform: 'uppercase',
-                        borderRadius: '0px',
-                        border: '1px solid var(--line)'
-                      }}>
-                        {article.published ? 'Published' : 'Draft'}
-                      </span>
-                    </button>
-                  </td>
-                  <td style={{ fontSize: '12px', opacity: 0.7 }}>
-                    {article.updatedAt ? new Date(article.updatedAt).toLocaleDateString() : 'N/A'}
-                  </td>
-                  <td style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
-                    {article.views || 0}
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                      <button 
-                        className="btn-mini" 
-                        onClick={() => viewArticleDetails(article)}
-                        style={{ border: '1px solid var(--line)' }}
-                      >
-                        View
-                      </button>
-                      <button 
-                        className="btn-mini" 
-                        onClick={() => startEdit(article)}
-                        disabled={article.id.startsWith('temp-')}
-                        style={{ border: '1px solid var(--line)' }}
-                      >
-                        Edit
-                      </button>
-                      <button 
-                        className="btn-mini" 
-                        onClick={() => handleDuplicate(article)}
-                        disabled={article.id.startsWith('temp-')}
-                        style={{ border: '1px solid var(--line)' }}
-                      >
-                        Clone
-                      </button>
-                      <button 
-                        className="btn-mini danger" 
-                        onClick={() => handleDeleteArticle(article.id)}
-                        disabled={article.id.startsWith('temp-')}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       )}
 
-      {/* Pagination Controls */}
-      {processedArticles.length > itemsPerPage && (
+      {/* VIEW: ADD / EDIT FORM */}
+      {currentView === 'form' && (
+        <div className="view show" id="view-form">
+          <div className="form-card">
+            <p className="form-title">
+              {selectedArticle ? 'Edit Article' : 'Add New Article'}
+            </p>
+            <p className="form-sub">Fields shown here match what appears on the Learn page.</p>
+            
+            <form onSubmit={handleFormSubmit}>
+              {/* Title */}
+              <div className="field">
+                <label>Article title</label>
+                <input 
+                  type="text" 
+                  value={formTitle}
+                  onChange={(e) => setFormTitle(e.target.value)}
+                  placeholder="e.g. What is breast cancer?"
+                  required
+                />
+              </div>
+
+              {/* Category & Read Time Row */}
+              <div className="field-row">
+                <div className="field">
+                  <label>Category</label>
+                  <select 
+                    value={formCategory}
+                    onChange={(e) => setFormCategory(e.target.value)}
+                  >
+                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="field">
+                  <label>Read time</label>
+                  <input 
+                    type="text" 
+                    value={formReadTime}
+                    onChange={(e) => setFormReadTime(e.target.value)}
+                    placeholder="e.g. 4 minute read"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Short description */}
+              <div className="field">
+                <label>Short description</label>
+                <input 
+                  type="text" 
+                  value={formSummary}
+                  onChange={(e) => setFormSummary(e.target.value)}
+                  placeholder="One line shown on the Learn category card"
+                  required
+                />
+              </div>
+
+              {/* Article body with toolbar */}
+              <div className="field">
+                <label>Article body</label>
+                
+                {/* Micro Editor Toolbar */}
+                <div style={{
+                  display: 'flex',
+                  gap: '4px',
+                  border: '1.5px solid var(--line)',
+                  borderBottom: 'none',
+                  padding: '6px',
+                  backgroundColor: 'var(--paper-deep)'
+                }}>
+                  <button type="button" className="btn-mini" onClick={() => insertFormatting('<b>', '</b>')} style={{ padding: '4px 8px' }}>B</button>
+                  <button type="button" className="btn-mini" onClick={() => insertFormatting('<i>', '</i>')} style={{ padding: '4px 8px' }}>I</button>
+                  <button type="button" className="btn-mini" onClick={() => insertFormatting('<h1>', '</h1>')} style={{ padding: '4px 8px' }}>H1</button>
+                  <button type="button" className="btn-mini" onClick={() => insertFormatting('<h2>', '</h2>')} style={{ padding: '4px 8px' }}>H2</button>
+                  <button type="button" className="btn-mini" onClick={() => insertFormatting('<blockquote>', '</blockquote>')} style={{ padding: '4px 8px' }}>Quote</button>
+                  <button type="button" className="btn-mini" onClick={() => insertFormatting('<ul>\n  <li>', '\n  </li>\n</ul>')} style={{ padding: '4px 8px' }}>List</button>
+                </div>
+
+                <textarea 
+                  ref={textareaRef}
+                  value={formContentBody}
+                  onChange={(e) => setFormContentBody(e.target.value)}
+                  placeholder="Write the full article content here..."
+                  style={{
+                    fontFamily: 'monospace',
+                    fontSize: '13.5px',
+                    borderTop: 'none',
+                    backgroundColor: 'var(--paper)'
+                  }}
+                  required
+                />
+              </div>
+
+              {/* Media uploads (Storage Integration) */}
+              <div className="field-row" style={{ border: '1px solid var(--line)', padding: '15px', backgroundColor: 'var(--paper-deep)', marginBottom: '20px' }}>
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <label>Featured Cover Image</label>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    onChange={handleFeaturedImageChange}
+                    style={{ fontSize: '11px', borderBottom: 'none' }}
+                  />
+                  {uploadingImage && <div style={{ fontSize: '11px', color: 'var(--coral)', fontFamily: 'var(--font-mono)' }}>Uploading featured cover...</div>}
+                  <input 
+                    type="text" 
+                    placeholder="Or paste cover URL..."
+                    value={featuredImageUrl}
+                    onChange={(e) => setFeaturedImageUrl(e.target.value)}
+                    style={{ fontSize: '12px', padding: '6px', marginTop: '6px', background: 'var(--paper)' }}
+                  />
+                </div>
+
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <label>Media Gallery Files</label>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    multiple 
+                    onChange={handleGalleryImagesChange}
+                    style={{ fontSize: '11px', borderBottom: 'none' }}
+                  />
+                  {uploadingGallery && <div style={{ fontSize: '11px', color: 'var(--coral)', fontFamily: 'var(--font-mono)' }}>Uploading gallery images...</div>}
+                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
+                    {galleryUrls.map((url, i) => (
+                      <div key={i} style={{ position: 'relative' }}>
+                        <img src={url} alt="Gallery item" style={{ width: '25px', height: '25px', objectFit: 'cover', border: '1px solid var(--line)' }} />
+                        <button 
+                          type="button" 
+                          onClick={() => setGalleryUrls(galleryUrls.filter((_, idx) => idx !== i))}
+                          style={{
+                            position: 'absolute', top: -3, right: -3, background: 'var(--coral)', color: 'white', border: 'none', 
+                            borderRadius: '50%', width: '10px', height: '10px', fontSize: '6px', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center'
+                          }}
+                        >✕</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div className="field">
+                <label>Tags (Comma-separated)</label>
+                <input 
+                  type="text" 
+                  value={formTags}
+                  onChange={(e) => setFormTags(e.target.value)}
+                  placeholder="e.g. Basics, Awareness, Symptoms"
+                />
+              </div>
+
+              {/* Status Radio Options & Author */}
+              <div className="field-row">
+                <div className="field">
+                  <label>Status</label>
+                  <div className="choice-row">
+                    <label className="choice">
+                      <input 
+                        type="radio" 
+                        name="status" 
+                        checked={formPublished}
+                        onChange={() => setFormPublished(true)}
+                      /> 
+                      Published
+                    </label>
+                    <label className="choice">
+                      <input 
+                        type="radio" 
+                        name="status" 
+                        checked={!formPublished}
+                        onChange={() => setFormPublished(false)}
+                      /> 
+                      Draft
+                    </label>
+                  </div>
+                </div>
+                
+                <div className="field">
+                  <label>Author / admin</label>
+                  <input 
+                    type="text" 
+                    value={formAuthor}
+                    onChange={(e) => setFormAuthor(e.target.value)}
+                    placeholder="Admin name"
+                  />
+                </div>
+              </div>
+
+              {/* Form actions */}
+              <div className="form-actions">
+                <button type="submit" className="btn-primary">Save article</button>
+                <button 
+                  type="button" 
+                  className="btn-ghost" 
+                  onClick={() => setCurrentView(articles.length === 0 ? 'empty' : 'list')}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW: EMPTY STATE */}
+      {currentView === 'empty' && (
+        <div className="view show" id="view-empty">
+          <div className="empty">
+            <h3>No articles yet</h3>
+            <p>Add your first educational article so it appears on the Learn page.</p>
+            <button className="btn-primary" onClick={startCreate}>Add new article</button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DELETE CONFIRMATION */}
+      <div className={`modal-overlay ${isDeleteModalOpen ? 'show' : ''}`} id="deleteModal">
+        <div className="modal">
+          <h4>Delete this article?</h4>
+          <p>This will remove the article from the Learn page. This action cannot be undone.</p>
+          <div className="modal-actions">
+            <button className="btn-ghost" onClick={closeDelete}>Cancel</button>
+            <button 
+              className="btn-secondary" 
+              style={{ borderColor: 'var(--oxblood)', color: 'var(--oxblood)' }} 
+              onClick={confirmDelete}
+            >
+              Delete article
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* VIEW ARTICLE PREVIEW MODAL */}
+      {isViewModalOpen && selectedArticle && (
         <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginTop: '10px',
-          borderTop: '1px solid var(--line)',
-          paddingTop: '15px'
+          position: 'fixed', inset: 0, backgroundColor: 'rgba(36, 19, 24, 0.5)',
+          display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1500, padding: '20px'
         }}>
-          <span style={{ fontSize: '12px', opacity: 0.7, fontFamily: 'var(--font-mono)' }}>
-            Showing {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, processedArticles.length)} of {processedArticles.length}
-          </span>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              className="btn btn-sm btn-secondary"
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
-              style={{ width: 'auto', minHeight: '34px', padding: '6px 12px' }}
-            >
-              Previous
-            </button>
-            <span style={{ display: 'flex', alignItems: 'center', padding: '0 10px', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
-              Page {currentPage} of {totalPages}
+          <div className="form-card" style={{ backgroundColor: 'var(--paper)', width: '90%', maxWidth: '700px', maxHeight: '85vh', overflowY: 'auto' }}>
+            <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--coral)', textTransform: 'uppercase' }}>
+              {selectedArticle.category} • {selectedArticle.readingTime} min read
             </span>
-            <button
-              className="btn btn-sm btn-secondary"
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              disabled={currentPage === totalPages}
-              style={{ width: 'auto', minHeight: '34px', padding: '6px 12px' }}
-            >
-              Next
-            </button>
+            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '22px', margin: '4px 0 12px', fontWeight: 'bold' }}>
+              {selectedArticle.title}
+            </h3>
+            
+            <img src={selectedArticle.mediaURL} alt="Featured cover" style={{ width: '100%', height: '220px', objectFit: 'cover', border: '1px solid var(--line)', marginBottom: '15px' }} />
+            
+            <p style={{ fontWeight: '500', fontSize: '14px', fontStyle: 'italic', marginBottom: '15px' }}>{selectedArticle.summary}</p>
+            
+            <div style={{ fontSize: '14px', lineHeight: '1.6', marginBottom: '20px' }} dangerouslySetInnerHTML={{ __html: selectedArticle.contentBody }} />
+
+            {selectedArticle.gallery && selectedArticle.gallery.length > 0 && (
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '15px' }}>
+                {selectedArticle.gallery.map((url, i) => (
+                  <img key={i} src={url} alt="gallery" style={{ width: '70px', height: '70px', objectFit: 'cover', border: '1px solid var(--line)' }} />
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', borderTop: '1px solid var(--line)', paddingTop: '15px' }}>
+              <button className="btn-mini" onClick={() => setIsViewModalOpen(false)}>Close Preview</button>
+            </div>
           </div>
         </div>
       )}
@@ -635,446 +778,6 @@ const ManageContent = () => {
           ← Back to Admin
         </Link>
       </div>
-
-      {/* ADD/EDIT MODAL OVERLAY */}
-      {isModalOpen && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(36, 19, 24, 0.5)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1500,
-          padding: '20px'
-        }}>
-          <div style={{
-            backgroundColor: 'var(--paper)',
-            border: '2px solid var(--ink)',
-            width: '90%',
-            maxWidth: '850px',
-            maxHeight: '90vh',
-            display: 'flex',
-            flexDirection: 'column',
-            boxShadow: '8px 8px 0px var(--ink)'
-          }}>
-            {/* Modal Header */}
-            <div style={{
-              padding: '16px 20px',
-              borderBottom: '2px solid var(--ink)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              backgroundColor: 'var(--paper-deep)'
-            }}>
-              <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: 'bold' }}>
-                {selectedArticle ? 'Edit Article' : 'Add New Article'}
-              </h3>
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '20px',
-                  cursor: 'pointer',
-                  fontWeight: 'bold',
-                  color: 'var(--ink)'
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Modal Form Content */}
-            <form onSubmit={handleFormSubmit} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%', margin: 0 }}>
-              <div style={{ padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                
-                {/* Title */}
-                <div className="field" style={{ margin: 0 }}>
-                  <label className="input-label">Article Title</label>
-                  <input
-                    type="text"
-                    className="input-field"
-                    value={formTitle}
-                    onChange={(e) => setFormTitle(e.target.value)}
-                    placeholder="e.g. Understanding Breast Cancer Stages"
-                    required
-                  />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
-                  {/* Category */}
-                  <div className="field" style={{ margin: 0 }}>
-                    <label className="input-label">Category</label>
-                    <select
-                      className="input-field"
-                      value={formCategory}
-                      onChange={(e) => setFormCategory(e.target.value)}
-                      style={{ padding: '11px 14px' }}
-                    >
-                      {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                    </select>
-                  </div>
-
-                  {/* Read Time */}
-                  <div className="field" style={{ margin: 0 }}>
-                    <label className="input-label">Reading Time (Minutes)</label>
-                    <input
-                      type="number"
-                      className="input-field"
-                      value={formReadTime}
-                      onChange={(e) => setFormReadTime(e.target.value)}
-                      min="1"
-                      required
-                    />
-                  </div>
-
-                  {/* Author */}
-                  <div className="field" style={{ margin: 0 }}>
-                    <label className="input-label">Author/Reviewer</label>
-                    <input
-                      type="text"
-                      className="input-field"
-                      value={formAuthor}
-                      onChange={(e) => setFormAuthor(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Summary */}
-                <div className="field" style={{ margin: 0 }}>
-                  <label className="input-label">Summary / Teaser</label>
-                  <textarea
-                    className="input-field"
-                    value={formSummary}
-                    onChange={(e) => setFormSummary(e.target.value)}
-                    placeholder="Short 2-3 sentence overview for card listings..."
-                    rows="2"
-                    style={{ resize: 'vertical' }}
-                    required
-                  />
-                </div>
-
-                {/* Rich text editor with formatting toolbar */}
-                <div className="field" style={{ margin: 0 }}>
-                  <label className="input-label">Content Body</label>
-                  
-                  {/* Editor Toolbar */}
-                  <div style={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: '4px',
-                    border: '1.5px solid var(--line)',
-                    borderBottom: 'none',
-                    padding: '6px',
-                    backgroundColor: 'var(--paper-deep)'
-                  }}>
-                    <button type="button" className="btn-mini" onClick={() => insertFormatting('<b>', '</b>')}>B</button>
-                    <button type="button" className="btn-mini" onClick={() => insertFormatting('<i>', '</i>')}>I</button>
-                    <button type="button" className="btn-mini" onClick={() => insertFormatting('<h1>', '</h1>')}>H1</button>
-                    <button type="button" className="btn-mini" onClick={() => insertFormatting('<h2>', '</h2>')}>H2</button>
-                    <button type="button" className="btn-mini" onClick={() => insertFormatting('<blockquote>', '</blockquote>')}>Quote</button>
-                    <button type="button" className="btn-mini" onClick={() => insertFormatting('<ul>\n  <li>', '\n  </li>\n</ul>')}>List</button>
-                    <button type="button" className="btn-mini" onClick={() => insertFormatting('<a href="', '" target="_blank">Link</a>')}>Link</button>
-                    <button type="button" className="btn-mini" onClick={() => {
-                      const url = prompt("Enter image URL:");
-                      if (url) insertFormatting(`<img src="${url}" alt="Article Image" style="width:100%; border:1px solid var(--line);" />`);
-                    }}>Img URL</button>
-                  </div>
-                  
-                  <textarea
-                    id="article-content-body"
-                    ref={textareaRef}
-                    className="input-field"
-                    value={formContentBody}
-                    onChange={(e) => setFormContentBody(e.target.value)}
-                    placeholder="Write article body in HTML or plain text here..."
-                    rows="8"
-                    style={{
-                      fontFamily: 'monospace',
-                      fontSize: '13px',
-                      resize: 'vertical',
-                      borderTop: 'none',
-                      backgroundColor: 'var(--paper)'
-                    }}
-                    required
-                  />
-                </div>
-
-                {/* Featured Image URL & Upload */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
-                  <div className="field" style={{ margin: 0 }}>
-                    <label className="input-label">Featured Image (Storage Upload)</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFeaturedImageChange}
-                      style={{ fontSize: '12px' }}
-                    />
-                    {uploadingImage && <div style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--coral)', marginTop: '4px' }}>Uploading image to Firebase...</div>}
-                    
-                    <div style={{ display: 'flex', gap: '10px', marginTop: '8px', alignItems: 'center' }}>
-                      <input
-                        type="text"
-                        className="input-field"
-                        value={featuredImageUrl}
-                        onChange={(e) => setFeaturedImageUrl(e.target.value)}
-                        placeholder="Or paste an image URL..."
-                        style={{ padding: '6px 8px', fontSize: '12px' }}
-                      />
-                      {featuredImageUrl && (
-                        <img 
-                          src={featuredImageUrl} 
-                          alt="Preview" 
-                          style={{ width: '40px', height: '40px', objectFit: 'cover', border: '1px solid var(--line)' }}
-                        />
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Gallery uploads */}
-                  <div className="field" style={{ margin: 0 }}>
-                    <label className="input-label">Additional Media Gallery</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={handleGalleryImagesChange}
-                      style={{ fontSize: '12px' }}
-                    />
-                    {uploadingGallery && <div style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--coral)', marginTop: '4px' }}>Uploading gallery files...</div>}
-                    <div style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '5px',
-                      marginTop: '8px',
-                      maxHeight: '60px',
-                      overflowY: 'auto'
-                    }}>
-                      {galleryUrls.map((url, i) => (
-                        <div key={i} style={{ position: 'relative' }}>
-                          <img src={url} alt="Gallery" style={{ width: '30px', height: '30px', objectFit: 'cover', border: '1px solid var(--line)' }} />
-                          <button 
-                            type="button" 
-                            onClick={() => setGalleryUrls(galleryUrls.filter((_, idx) => idx !== i))}
-                            style={{
-                              position: 'absolute', top: -3, right: -3, padding: 0, 
-                              background: 'var(--coral)', color: 'white', border: 'none', 
-                              borderRadius: '50%', width: '12px', height: '12px', fontSize: '8px', 
-                              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                            }}
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Tags */}
-                <div className="field" style={{ margin: 0 }}>
-                  <label className="input-label">Tags (Comma-separated)</label>
-                  <input
-                    type="text"
-                    className="input-field"
-                    value={formTags}
-                    onChange={(e) => setFormTags(e.target.value)}
-                    placeholder="e.g. selfcheck, education, symptoms, oncology"
-                  />
-                </div>
-
-                {/* Status Toggle */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '5px' }}>
-                  <input
-                    type="checkbox"
-                    id="published"
-                    checked={formPublished}
-                    onChange={(e) => setFormPublished(e.target.checked)}
-                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                  />
-                  <label htmlFor="published" style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', cursor: 'pointer', textTransform: 'uppercase' }}>
-                    Publish Immediately (Active on user feed)
-                  </label>
-                </div>
-
-              </div>
-
-              {/* Modal Footer Actions */}
-              <div style={{
-                padding: '16px 20px',
-                borderTop: '2px solid var(--ink)',
-                display: 'flex',
-                justifyContent: 'flex-end',
-                gap: '12px',
-                backgroundColor: 'var(--paper-deep)'
-              }}>
-                <button 
-                  type="button" 
-                  className="btn btn-secondary btn-sm" 
-                  onClick={() => setIsModalOpen(false)}
-                  style={{ width: 'auto' }}
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit" 
-                  className="btn btn-primary btn-sm" 
-                  style={{ width: 'auto' }}
-                >
-                  {selectedArticle ? 'Save Changes' : 'Create Article'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* VIEW DETAILS MODAL */}
-      {isViewModalOpen && selectedArticle && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(36, 19, 24, 0.5)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1500,
-          padding: '20px'
-        }}>
-          <div style={{
-            backgroundColor: 'var(--paper)',
-            border: '2px solid var(--ink)',
-            width: '90%',
-            maxWidth: '750px',
-            maxHeight: '85vh',
-            display: 'flex',
-            flexDirection: 'column',
-            boxShadow: '8px 8px 0px var(--ink)'
-          }}>
-            {/* Modal Header */}
-            <div style={{
-              padding: '16px 20px',
-              borderBottom: '2px solid var(--ink)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              backgroundColor: 'var(--paper-deep)'
-            }}>
-              <div>
-                <span style={{ fontSize: '10.5px', fontFamily: 'var(--font-mono)', color: 'var(--coral)', textTransform: 'uppercase' }}>
-                  {selectedArticle.category} • {selectedArticle.readingTime} min read
-                </span>
-                <h3 style={{ margin: '4px 0 0', fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: 'bold' }}>
-                  {selectedArticle.title}
-                </h3>
-              </div>
-              <button 
-                onClick={() => setIsViewModalOpen(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '20px',
-                  cursor: 'pointer',
-                  fontWeight: 'bold',
-                  color: 'var(--ink)'
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Content Body */}
-            <div style={{ padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              
-              <img 
-                src={selectedArticle.mediaURL} 
-                alt="Featured" 
-                style={{ width: '100%', height: '240px', objectFit: 'cover', border: '1px solid var(--line)' }}
-              />
-
-              <div className="editor-note" style={{ margin: 0 }}>
-                <b>Summary</b>
-                {selectedArticle.summary}
-              </div>
-
-              {/* Formatted body HTML parser */}
-              <div 
-                style={{
-                  fontSize: '14.5px',
-                  lineHeight: '1.6',
-                  color: 'var(--ink)'
-                }}
-                dangerouslySetInnerHTML={{ __html: selectedArticle.contentBody || '<i>No content written yet.</i>' }}
-              />
-
-              {/* Gallery (if any) */}
-              {selectedArticle.gallery && selectedArticle.gallery.length > 0 && (
-                <div>
-                  <h5 style={{ fontFamily: 'var(--font-mono)', fontSize: '10.5px', textTransform: 'uppercase', marginBottom: '8px', color: 'var(--oxblood)' }}>
-                    Additional Media Gallery
-                  </h5>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    {selectedArticle.gallery.map((url, index) => (
-                      <img 
-                        key={index}
-                        src={url}
-                        alt={`Gallery ${index}`}
-                        style={{ width: '80px', height: '80px', objectFit: 'cover', border: '1px solid var(--line)' }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Metadata details */}
-              <div style={{
-                marginTop: '15px',
-                borderTop: '1px solid var(--line)',
-                paddingTop: '12px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '10px',
-                fontSize: '11px',
-                fontFamily: 'var(--font-mono)',
-                opacity: 0.7
-              }}>
-                <div>Author: {selectedArticle.author}</div>
-                <div>Status: {selectedArticle.published ? 'Published' : 'Draft'}</div>
-                <div>Views: {selectedArticle.views || 0}</div>
-                <div>Last Updated: {selectedArticle.updatedAt ? new Date(selectedArticle.updatedAt).toLocaleString() : 'N/A'}</div>
-              </div>
-
-            </div>
-
-            {/* Modal Footer */}
-            <div style={{
-              padding: '16px 20px',
-              borderTop: '2px solid var(--ink)',
-              display: 'flex',
-              justifyContent: 'flex-end',
-              backgroundColor: 'var(--paper-deep)'
-            }}>
-              <button 
-                type="button" 
-                className="btn btn-secondary btn-sm" 
-                onClick={() => setIsViewModalOpen(false)}
-                style={{ width: 'auto' }}
-              >
-                Close Preview
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );
