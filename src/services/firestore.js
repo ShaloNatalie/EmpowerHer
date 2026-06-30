@@ -53,12 +53,14 @@ const REMINDERS_COLL = 'reminders';
 export const fetchReminders = async (userId) => {
   console.log(`Firestore: Fetching reminders for user: ${userId}`);
   const colRef = collection(db, REMINDERS_COLL);
-  const q = query(colRef, where('userId', '==', userId), orderBy('date', 'asc'));
+  const q = query(colRef, where('userId', '==', userId));
   const snapshot = await getDocs(q);
   const list = [];
   snapshot.forEach(doc => {
     list.push({ id: doc.id, ...doc.data() });
   });
+  // Sort locally by date to avoid composite index requirements
+  list.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   return list;
 };
 

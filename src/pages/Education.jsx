@@ -1,52 +1,45 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebase/firebase';
 import '../styles/education.css';
 
 const Education = () => {
-  const topics = [
-    {
-      no: '01',
-      ic: '?',
-      title: 'What is breast cancer?',
-      description: 'A simple explanation of how it develops and what it means for the body.',
-      classSuffix: ''
-    },
-    {
-      no: '02',
-      ic: 'i',
-      title: 'Risk factors',
-      description: 'What can raise the chance of breast cancer — and what doesn\'t.',
-      classSuffix: 'alt'
-    },
-    {
-      no: '03',
-      ic: '!',
-      title: 'Common symptoms',
-      description: 'Changes worth noticing, explained gently and clearly.',
-      classSuffix: 'alt2'
-    },
-    {
-      no: '04',
-      ic: '✓',
-      title: 'Myths and facts',
-      description: 'Common things people believe about breast cancer — and what\'s actually true.',
-      classSuffix: ''
-    },
-    {
-      no: '05',
-      ic: '+',
-      title: 'Prevention and healthy habits',
-      description: 'Everyday habits that support your overall breast health.',
-      classSuffix: 'alt'
-    },
-    {
-      no: '06',
-      ic: '★',
-      title: 'Why early detection matters',
-      description: 'How noticing changes sooner gives you more options, sooner.',
-      classSuffix: 'alt2'
-    }
-  ];
+  const [articles, setArticles] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Sync published articles in real-time
+  useEffect(() => {
+    const colRef = collection(db, 'educationalContent');
+    const q = query(colRef, where('published', '==', true));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list = [];
+      snapshot.forEach(doc => {
+        list.push({ id: doc.id, ...doc.data() });
+      });
+      // Sort locally by createdAt descending to bypass composite index requirements
+      list.sort((a, b) => {
+        const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 
+                      a.createdAt?.toDate?.() ? a.createdAt.toDate().getTime() : 
+                      new Date(a.createdAt || 0).getTime();
+        const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 
+                      b.createdAt?.toDate?.() ? b.createdAt.toDate().getTime() : 
+                      new Date(b.createdAt || 0).getTime();
+        return (timeB || 0) - (timeA || 0);
+      });
+      setArticles(list);
+      setLoading(false);
+    }, (err) => {
+      console.error("Firestore education sync error:", err);
+      setLoading(false);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  const icons = ['?', 'i', '!', '✓', '+', '★'];
+  const colors = ['', 'alt', 'alt2'];
 
   return (
     <div>
@@ -64,28 +57,37 @@ const Education = () => {
       <div className="edu-section-head">
         <h3>Topics</h3>
         <div className="rule" />
-        <span className="tag">Six articles</span>
+        <span className="tag">{loading ? '...' : `${articles.length} articles`}</span>
       </div>
 
       {/* Topics Grid */}
-      <div className="edu-grid">
-        {topics.map((topic) => (
-          <Link
-            key={topic.no}
-            to="/education/article"
-            className={`edu-card ${topic.classSuffix}`}
-          >
-            <span className="corner" />
-            <span className="no">{topic.no}</span>
-            <div className="ic">{topic.ic}</div>
-            <div>
-              <h4>{topic.title}</h4>
-              <p>{topic.description}</p>
-              <span className="read">Read article</span>
-            </div>
-          </Link>
-        ))}
-      </div>
+      {loading ? (
+        <div style={{ padding: '40px', textAlign: 'center', opacity: 0.6 }}>Loading articles...</div>
+      ) : articles.length === 0 ? (
+        <div className="empty" style={{ padding: '60px 20px', textAlign: 'center' }}>
+          <h3>No topics available</h3>
+          <p>Please check back later for educational content.</p>
+        </div>
+      ) : (
+        <div className="edu-grid">
+          {articles.map((article, idx) => (
+            <Link
+              key={article.id}
+              to={`/education/article?id=${article.id}`}
+              className={`edu-card ${colors[idx % 3]}`}
+            >
+              <span className="corner" />
+              <span className="no">{(idx + 1).toString().padStart(2, '0')}</span>
+              <div className="ic">{icons[idx % 6]}</div>
+              <div>
+                <h4>{article.title}</h4>
+                <p>{article.summary}</p>
+                <span className="read">Read article</span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

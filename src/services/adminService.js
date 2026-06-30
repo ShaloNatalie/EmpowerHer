@@ -204,3 +204,35 @@ export const restoreFacility = async (id) => {
     updatedAt: serverTimestamp()
   });
 };
+
+// ==========================================
+// USER FEEDBACK SERVICES
+// ==========================================
+const FEEDBACK_COLL = 'userFeedback';
+
+export const fetchAllFeedback = async () => {
+  const colRef = collection(db, FEEDBACK_COLL);
+  const q = query(colRef, orderBy('createdAt', 'desc'));
+  const snapshot = await getDocs(q);
+  const feedback = [];
+  snapshot.forEach((doc) => {
+    feedback.push({
+      id: doc.id,
+      ...doc.data()
+    });
+  });
+  return feedback;
+};
+
+export const updateFeedbackStatus = async (id, reviewed) => {
+  const docRef = doc(db, FEEDBACK_COLL, id);
+  await updateDoc(docRef, {
+    reviewed: reviewed,
+    status: reviewed ? 'Reviewed' : 'New'
+  });
+};
+
+export const deleteFeedback = async (id) => {
+  const docRef = doc(db, FEEDBACK_COLL, id);
+  await deleteDoc(docRef);
+};
