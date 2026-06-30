@@ -1,8 +1,40 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { fetchReminders } from '../services/firestore';
+import '../styles/dashboard.css';
 import '../styles/dashboard.css';
 
 const Dashboard = () => {
+  const { user } = useAuth();
+  const [reminders, setReminders] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      fetchReminders(user.uid).then(data => {
+        setReminders(data);
+        setLoading(false);
+      }).catch(err => {
+        console.error(err);
+        setLoading(false);
+      });
+    }
+  }, [user]);
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const activeToday = reminders.filter(r => r.date === todayStr && r.status === 'Active').length;
+  
+  const upcomingReminders = reminders
+    .filter(r => (r.date > todayStr || (r.date === todayStr && r.status === 'Active')) && r.status === 'Active')
+    .sort((a, b) => {
+      const d = (a.date || '').localeCompare(b.date || '');
+      if (d !== 0) return d;
+      return (a.time || '').localeCompare(b.time || '');
+    });
+  
+  const nextUpcoming = upcomingReminders.length > 0 ? upcomingReminders[0] : null;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
@@ -36,6 +68,39 @@ const Dashboard = () => {
             Start self-check
           </Link>
         </div>
+      </div>
+
+      {/* Mini Reminder Summary Card */}
+      <div style={{ 
+        border: '1px solid var(--line)', 
+        padding: '16px 20px', 
+        background: 'var(--paper)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h4 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: '18px' }}>Your Reminders</h4>
+          <Link to="/reminders" style={{ fontSize: '13px', color: 'var(--coral)' }}>Manage</Link>
+        </div>
+        {loading ? (
+          <p style={{ margin: 0, fontSize: '13.5px', opacity: 0.6 }}>Loading reminders...</p>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginTop: '4px' }}>
+            <div style={{ flex: 1, minWidth: '200px' }}>
+              <p style={{ margin: 0, fontSize: '12px', opacity: 0.7, fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>Today's active</p>
+              <p style={{ margin: '4px 0 0', fontWeight: '600' }}>
+                {activeToday > 0 ? `${activeToday} reminder(s) due today` : 'No reminders due today.'}
+              </p>
+            </div>
+            <div style={{ flex: 2, minWidth: '240px' }}>
+              <p style={{ margin: 0, fontSize: '12px', opacity: 0.7, fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>Next upcoming</p>
+              <p style={{ margin: '4px 0 0', fontWeight: '600' }}>
+                {nextUpcoming ? `Upcoming: ${nextUpcoming.title} on ${nextUpcoming.date} at ${nextUpcoming.time}` : 'No upcoming reminders.'}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Section Header */}

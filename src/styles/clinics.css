@@ -102,6 +102,58 @@
   text-decoration: underline;
 }
 
+.summary-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border: 1px solid var(--line);
+  margin-bottom: 36px;
+}
+
+.sum-card {
+  padding: 18px 16px;
+  border-right: 1px solid var(--line);
+  position: relative;
+  background-color: var(--paper);
+}
+
+.summary-row .sum-card:last-child {
+  border-right: none;
+}
+
+.sum-card .corner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 12px;
+  height: 12px;
+  background: var(--mustard);
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+
+.sum-card.alt .corner {
+  background: var(--coral);
+}
+
+.sum-card.alt2 .corner {
+  background: var(--oxblood);
+}
+
+.sum-card .label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  opacity: .5;
+  margin: 0 0 8px;
+}
+
+.sum-card .value {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 20px;
+  margin: 0;
+}
+
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

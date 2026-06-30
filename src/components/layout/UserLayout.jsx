@@ -2,12 +2,43 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import UserSidebar from './UserSidebar';
 import Navbar from './Navbar';
+import { useReminderChecker } from '../../hooks/useReminderChecker';
 import '../../styles/global.css';
 import '../../styles/responsive.css';
 
 const UserLayout = () => {
+  const { toastMessage, dismissToast } = useReminderChecker();
+
   return (
     <div className="app-container app-container-with-sidebar">
+      {/* Reminder Toast Overlay */}
+      {toastMessage && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          zIndex: 9999,
+          background: 'var(--oxblood)',
+          color: 'var(--paper)',
+          padding: '16px 24px',
+          borderRadius: '8px',
+          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          fontFamily: 'var(--font-base)',
+          fontSize: '14px'
+        }}>
+          <span>{toastMessage}</span>
+          <button 
+            onClick={dismissToast} 
+            style={{ background: 'transparent', border: 'none', color: 'var(--paper)', cursor: 'pointer', fontSize: '18px', padding: 0 }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Desktop User Sidebar */}
       <UserSidebar />
 

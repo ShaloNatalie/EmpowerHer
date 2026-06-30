@@ -285,7 +285,21 @@ const SelfExam = () => {
           <div className="self-flow-note" style={{ justifyContent: 'center' }}>
             <span className="arrow">→</span> After saving, this record appears in your Self-Check History page.
           </div>
-          <Button variant="primary" onClick={() => navigate('/records')}>
+          {setReminderState === 'Yes' && (
+            <Button variant="primary" onClick={() => navigate('/reminders', { 
+              state: { 
+                prefill: true, 
+                title: 'Monthly self-check', 
+                type: 'Monthly self-check', 
+                repeat: 'Monthly', 
+                status: 'Active', 
+                method: 'In-app' 
+              } 
+            })}>
+              Set Reminder
+            </Button>
+          )}
+          <Button variant={setReminderState === 'Yes' ? 'secondary' : 'primary'} onClick={() => navigate('/records')}>
             View History Log
           </Button>
           <Button variant="secondary" onClick={() => navigate('/dashboard')}>

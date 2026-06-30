@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { fetchReminders, saveReminder, deleteReminder } from '../services/firestore';
+import { serverTimestamp } from 'firebase/firestore';
 import '../styles/reminders.css';
 
 const Reminders = () => {
   const { user } = useAuth();
+  const location = useLocation();
   
   // Reminders list state
   const [reminders, setReminders] = useState([]);
@@ -13,12 +16,19 @@ const Reminders = () => {
   // Form states
   const [title, setTitle] = useState('');
   const [type, setType] = useState('Monthly self-check');
-  const [date, setDate] = useState('2026-07-12');
-  const [time, setTime] = useState('20:00');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [time, setTime] = useState('08:00');
   const [repeat, setRepeat] = useState('Monthly');
   const [note, setNote] = useState('');
-  const [notifyPreference, setNotifyPreference] = useState(['In-app']);
   const [status, setStatus] = useState('Active');
+  
+  // Notification states
+  const [notifyMethod, setNotifyMethod] = useState('In-app'); // 'In-app' or 'In-app + Browser'
+  const [browserPermission, setBrowserPermission] = useState('default');
+
+  // Notice states
+  const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   // Editing state
   const [editingId, setEditingId] = useState(null);
@@ -26,6 +36,42 @@ const Reminders = () => {
   // Modal State
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [reminderToDelete, setReminderToDelete] = useState(null);
+
+  // Check initial notification permission
+  useEffect(() => {
+    if ("Notification" in window) {
+      setBrowserPermission(Notification.permission);
+    } else {
+      setBrowserPermission('unsupported');
+    }
+  }, []);
+
+  const requestNotificationPermission = async () => {
+    if (!("Notification" in window)) {
+      alert("Browser notifications are not supported on this browser.");
+      return;
+    }
+    try {
+      const permission = await Notification.requestPermission();
+      setBrowserPermission(permission);
+    } catch (err) {
+      console.error("Failed to request notification permission:", err);
+    }
+  };
+
+  // Prefill logic from location state (e.g. from Self-Examination)
+  useEffect(() => {
+    if (location.state?.prefill) {
+      setTitle(location.state.title || '');
+      setType(location.state.type || 'Monthly self-check');
+      setRepeat(location.state.repeat || 'Monthly');
+      setStatus(location.state.status || 'Active');
+      if (location.state.method === 'In-app + Browser') setNotifyMethod('In-app + Browser');
+      
+      // Clear state so it doesn't prefill again on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location]);
 
   // Fetch reminders on load
   useEffect(() => {
@@ -38,6 +84,7 @@ const Reminders = () => {
         })
         .catch(err => {
           console.error("Error loading user reminders:", err);
+          setErrorMsg("Failed to load reminders.");
           setLoading(false);
         });
     }
@@ -63,7 +110,7 @@ const Reminders = () => {
     const minute = parts[1];
     const ampm = hour >= 12 ? 'PM' : 'AM';
     hour = hour % 12;
-    hour = hour ? hour : 12; // the hour '0' should be '12'
+    hour = hour ? hour : 12;
     return `${hour}:${minute} ${ampm}`;
   };
 
@@ -71,26 +118,38 @@ const Reminders = () => {
   const handleSaveReminder = async (e) => {
     e.preventDefault();
     if (!title.trim() || !user) return;
+    
+    setSuccessMsg('');
+    setErrorMsg('');
 
-    const emailNotification = notifyPreference.includes('Email/SMS');
+    // Combine date and time to calculate nextDueAt
+    let nextDueAt = null;
+    if (date && time) {
+      const dateTimeString = `${date}T${time}`;
+      nextDueAt = new Date(dateTimeString).getTime();
+    }
+
+    const browserNotificationEnabled = notifyMethod === 'In-app + Browser' && browserPermission === 'granted';
 
     const payload = {
       userId: user.uid,
-      userEmail: user.email || '',
-      userName: user.displayName || 'User',
       title,
       type,
       date,
       time,
       repeat,
-      note,
-      notifyPreference,
+      notes: note,
       status,
-      emailNotification,
-      lastSent: editingId ? (reminders.find(r => r.id === editingId)?.lastSent || null) : null,
-      nextReminder: date, // initially matches date
-      deliveryStatus: editingId ? (reminders.find(r => r.id === editingId)?.deliveryStatus || 'Pending') : 'Pending'
+      method: notifyMethod,
+      browserNotificationEnabled,
+      notificationShown: false,
+      nextDueAt,
+      updatedAt: serverTimestamp()
     };
+    
+    if (!editingId) {
+      payload.createdAt = serverTimestamp();
+    }
 
     // Optimistic UI updates
     const prevReminders = [...reminders];
@@ -106,26 +165,34 @@ const Reminders = () => {
 
     try {
       const savedId = await saveReminder(editingId, payload);
-      // Replace temp ID with actual firestore ID if created
       if (!editingId) {
         setReminders(prev => prev.map(r => r.id.toString().startsWith('temp-') ? { ...r, id: savedId } : r));
       }
+      if (browserNotificationEnabled) {
+        setSuccessMsg("Reminder saved. Browser notification will appear when EmpowerHer is open.");
+      } else {
+        setSuccessMsg("Reminder saved. It will appear inside the app.");
+      }
+      setTimeout(() => setSuccessMsg(''), 4000);
     } catch (err) {
       console.error("Error saving reminder:", err);
       setReminders(prevReminders); // Rollback
+      setErrorMsg("Failed to save reminder.");
+      setTimeout(() => setErrorMsg(''), 4000);
     }
   };
 
   const handleEditClick = (reminder) => {
     setEditingId(reminder.id);
-    setTitle(reminder.title);
-    setType(reminder.type);
-    setDate(reminder.date);
-    setTime(reminder.time);
-    setRepeat(reminder.repeat);
-    setNote(reminder.note);
-    setNotifyPreference(reminder.notifyPreference || []);
-    setStatus(reminder.status);
+    setTitle(reminder.title || '');
+    setType(reminder.type || 'Monthly self-check');
+    setDate(reminder.date || '');
+    setTime(reminder.time || '');
+    setRepeat(reminder.repeat || 'Monthly');
+    setNote(reminder.notes || '');
+    setStatus(reminder.status || 'Active');
+    setNotifyMethod(reminder.method || 'In-app');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleToggleStatus = async (id) => {
@@ -139,10 +206,14 @@ const Reminders = () => {
     ));
 
     try {
-      await saveReminder(id, { status: nextStatus });
+      await saveReminder(id, { status: nextStatus, updatedAt: serverTimestamp() });
+      setSuccessMsg("Reminder updated successfully.");
+      setTimeout(() => setSuccessMsg(''), 3000);
     } catch (err) {
       console.error(err);
       setReminders(reminders); // rollback on error
+      setErrorMsg("Failed to update reminder.");
+      setTimeout(() => setErrorMsg(''), 3000);
     }
   };
 
@@ -161,18 +232,14 @@ const Reminders = () => {
 
       try {
         await deleteReminder(targetId);
+        setSuccessMsg("Reminder deleted successfully.");
+        setTimeout(() => setSuccessMsg(''), 3000);
       } catch (err) {
         console.error(err);
         setReminders(prevReminders); // Rollback
+        setErrorMsg("Failed to delete reminder.");
+        setTimeout(() => setErrorMsg(''), 3000);
       }
-    }
-  };
-
-  const handleNotifyCheckboxChange = (pref) => {
-    if (notifyPreference.includes(pref)) {
-      setNotifyPreference(notifyPreference.filter(p => p !== pref));
-    } else {
-      setNotifyPreference([...notifyPreference, pref]);
     }
   };
 
@@ -180,18 +247,28 @@ const Reminders = () => {
     setEditingId(null);
     setTitle('');
     setType('Monthly self-check');
-    setDate('2026-07-12');
-    setTime('20:00');
+    setDate(new Date().toISOString().split('T')[0]);
+    setTime('08:00');
     setRepeat('Monthly');
     setNote('');
-    setNotifyPreference(['In-app']);
     setStatus('Active');
+    setNotifyMethod('In-app');
   };
 
-  // Stats calculation
-  const activeCount = reminders.filter(r => r.status === 'Active').length;
+  // Processing Due Today and Upcoming
+  const todayStr = new Date().toISOString().split('T')[0];
   
-  // Find next reminder date
+  // Sort reminders by date, then time
+  const sortedReminders = [...reminders].sort((a, b) => {
+    const dateCompare = (a.date || '').localeCompare(b.date || '');
+    if (dateCompare !== 0) return dateCompare;
+    return (a.time || '').localeCompare(b.time || '');
+  });
+
+  const dueToday = sortedReminders.filter(r => r.date === todayStr && r.status === 'Active');
+  const upcoming = sortedReminders.filter(r => r.date !== todayStr || r.status !== 'Active');
+
+  const activeCount = reminders.filter(r => r.status === 'Active').length;
   const activeReminders = reminders.filter(r => r.status === 'Active').sort((a, b) => a.date.localeCompare(b.date));
   const nextReminderText = activeReminders.length > 0 ? formatDate(activeReminders[0].date) : 'Not set';
 
@@ -215,6 +292,17 @@ const Reminders = () => {
         <b>About reminders</b>
         Reminders are here to support your routine. EmpowerHer does not provide diagnosis or medical advice. If you notice unusual changes, please visit a qualified healthcare provider.
       </div>
+
+      {successMsg && (
+        <div style={{ padding: '12px 18px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)', color: 'var(--oxblood)', fontSize: '14px', borderRadius: '4px' }}>
+          {successMsg}
+        </div>
+      )}
+      {errorMsg && (
+        <div style={{ padding: '12px 18px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', color: 'var(--oxblood)', fontSize: '14px', borderRadius: '4px' }}>
+          {errorMsg}
+        </div>
+      )}
 
       {/* Summary Row */}
       <div className="summary-row">
@@ -245,6 +333,21 @@ const Reminders = () => {
         
         {/* Left Form Panel */}
         <div>
+          
+          {/* Notification Permission Box */}
+          <div style={{ marginBottom: '20px', padding: '16px', border: '1px solid var(--line)', background: 'var(--paper)', borderRadius: '0' }}>
+            <h4 style={{ margin: '0 0 8px 0', fontSize: '16px' }}>Enable browser notifications</h4>
+            {browserPermission === 'granted' ? (
+              <div style={{ color: '#10b981', fontSize: '13px', fontWeight: 'bold' }}>✓ Browser notifications enabled.</div>
+            ) : browserPermission === 'denied' ? (
+              <div style={{ color: '#ef4444', fontSize: '13px' }}>Notifications are blocked. Please enable them in your browser settings.</div>
+            ) : browserPermission === 'unsupported' ? (
+              <div style={{ color: '#f59e0b', fontSize: '13px' }}>Browser notifications are not supported on this browser.</div>
+            ) : (
+              <button type="button" className="btn-secondary" onClick={requestNotificationPermission}>Allow Notifications</button>
+            )}
+          </div>
+
           <div className="section-head">
             <h3>{editingId ? 'Edit' : 'New'}</h3>
             <div className="rule"></div>
@@ -318,50 +421,38 @@ const Reminders = () => {
                       onChange={(e) => setRepeat(e.target.value)} 
                     /> Monthly
                   </label>
-                  <label className="choice">
-                    <input 
-                      type="radio" 
-                      name="repeat" 
-                      value="Custom" 
-                      checked={repeat === 'Custom'} 
-                      onChange={(e) => setRepeat(e.target.value)} 
-                    /> Custom
-                  </label>
                 </div>
               </div>
 
               <div className="field">
-                <label>Note</label>
+                <label>Notes</label>
                 <textarea 
                   value={note} 
                   onChange={(e) => setNote(e.target.value)} 
-                  placeholder="Do this in a private and comfortable place."
+                  placeholder="Optional notes for this reminder."
                 />
               </div>
 
               <div className="field">
                 <label>Notify me by</label>
-                <div className="choice-row">
-                  <label className="choice">
+                <div className="choice-row" style={{ flexDirection: 'column', gap: '8px', alignItems: 'flex-start' }}>
+                  <label className="choice" style={{ margin: 0 }}>
                     <input 
-                      type="checkbox" 
-                      checked={notifyPreference.includes('In-app')} 
-                      onChange={() => handleNotifyCheckboxChange('In-app')} 
-                    /> In-app
+                      type="radio"
+                      name="notifyMethod"
+                      value="In-app"
+                      checked={notifyMethod === 'In-app'} 
+                      onChange={() => setNotifyMethod('In-app')} 
+                    /> In-app only
                   </label>
-                  <label className="choice">
+                  <label className="choice" style={{ margin: 0 }}>
                     <input 
-                      type="checkbox" 
-                      checked={notifyPreference.includes('Phone notification')} 
-                      onChange={() => handleNotifyCheckboxChange('Phone notification')} 
-                    /> Phone notification
-                  </label>
-                  <label className="choice">
-                    <input 
-                      type="checkbox" 
-                      checked={notifyPreference.includes('Email/SMS')} 
-                      onChange={() => handleNotifyCheckboxChange('Email/SMS')} 
-                    /> Email Reminder
+                      type="radio" 
+                      name="notifyMethod"
+                      value="In-app + Browser"
+                      checked={notifyMethod === 'In-app + Browser'} 
+                      onChange={() => setNotifyMethod('In-app + Browser')} 
+                    /> In-app + Browser notification
                   </label>
                 </div>
               </div>
@@ -400,52 +491,99 @@ const Reminders = () => {
 
         {/* Right List Panel */}
         <div>
-          <div className="section-head">
-            <h3>Your reminders</h3>
-            <div className="rule"></div>
-            <span className="tag">{reminders.length} total</span>
-          </div>
-
+          
           {loading ? (
             <div style={{ padding: '20px', textAlign: 'center', opacity: 0.6 }}>Loading reminders...</div>
           ) : reminders.length === 0 ? (
-            <div className="empty">
-              <h3>No reminders yet.</h3>
-              <p>Set a reminder to help make breast self-checks part of your routine.</p>
-              <button className="btn-primary" onClick={resetForm}>Create reminder</button>
-            </div>
-          ) : (
-            reminders.map((rem, idx) => (
-              <div key={rem.id} className={`rem-card ${idx % 2 === 1 ? 'alt' : ''}`} style={{ opacity: rem.id.toString().startsWith('temp-') ? 0.6 : 1 }}>
-                <span className="corner"></span>
-                <div className="rem-top">
-                  <p className="rem-title">{rem.title}</p>
-                  <span className={`status-pill ${rem.status === 'Off' ? 'off' : ''}`}>
-                    {rem.status}
-                  </span>
-                </div>
-                <div className="rem-meta">
-                  <span>{rem.type}</span>
-                  <span>{formatDate(rem.date)}, {formatTime(rem.time)}</span>
-                  <span>Repeats {rem.repeat.toLowerCase()}</span>
-                </div>
-                {rem.emailNotification && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--coral)', marginTop: '4px' }}>
-                    <span>📧 Email notification ON</span>
-                    {rem.deliveryStatus && <span style={{ opacity: 0.6 }}>({rem.deliveryStatus})</span>}
-                  </div>
-                )}
-                <p className="rem-note">{rem.note}</p>
-                
-                <div className="rem-actions">
-                  <button className="btn-mini primary" onClick={() => handleEditClick(rem)} disabled={rem.id.toString().startsWith('temp-')}>Edit</button>
-                  <button className="btn-mini" onClick={() => handleToggleStatus(rem.id)} disabled={rem.id.toString().startsWith('temp-')}>
-                    {rem.status === 'Active' ? 'Disable' : 'Enable'}
-                  </button>
-                  <button className="btn-mini danger" onClick={() => handleDeleteTrigger(rem)} disabled={rem.id.toString().startsWith('temp-')}>Delete</button>
-                </div>
+            <>
+              <div className="section-head">
+                <h3>Your reminders</h3>
+                <div className="rule"></div>
               </div>
-            ))
+              <div className="empty">
+                <h3>No reminders yet.</h3>
+                <p>Set a reminder to help make breast self-checks part of your routine.</p>
+                <button className="btn-primary" onClick={resetForm}>Create reminder</button>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Due Today Section */}
+              {dueToday.length > 0 && (
+                <>
+                  <div className="section-head">
+                    <h3>Due Today</h3>
+                    <div className="rule"></div>
+                    <span className="tag" style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }}>{dueToday.length} active</span>
+                  </div>
+                  {dueToday.map((rem, idx) => (
+                    <div key={rem.id} className={`rem-card ${idx % 2 === 1 ? 'alt' : ''}`} style={{ borderLeft: '4px solid var(--coral)' }}>
+                      <span className="corner"></span>
+                      <div className="rem-top">
+                        <p className="rem-title">{rem.title}</p>
+                        <span className="status-pill">{rem.status}</span>
+                      </div>
+                      <div className="rem-meta">
+                        <span>{rem.type}</span>
+                        <span>{formatDate(rem.date)}, {formatTime(rem.time)}</span>
+                        <span>Repeats {rem.repeat}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', fontFamily: 'var(--font-mono)', color: 'var(--ink)', marginTop: '4px', opacity: 0.7 }}>
+                        <span>Method: {rem.method || 'In-app'}</span>
+                      </div>
+                      {rem.notes && <p className="rem-note">{rem.notes}</p>}
+                      
+                      <div className="rem-actions">
+                        <button className="btn-mini primary" onClick={() => handleEditClick(rem)}>Edit</button>
+                        <button className="btn-mini" onClick={() => handleToggleStatus(rem.id)}>
+                          {rem.status === 'Active' ? 'Turn Off' : 'Turn On'}
+                        </button>
+                        <button className="btn-mini danger" onClick={() => handleDeleteTrigger(rem)}>Delete</button>
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{ height: '30px' }} />
+                </>
+              )}
+
+              {/* Upcoming Section */}
+              <div className="section-head">
+                <h3>Upcoming & Inactive</h3>
+                <div className="rule"></div>
+                <span className="tag">{upcoming.length} total</span>
+              </div>
+              {upcoming.length === 0 && (
+                <div style={{ fontSize: '13px', opacity: 0.6, padding: '10px' }}>No upcoming reminders.</div>
+              )}
+              {upcoming.map((rem, idx) => (
+                <div key={rem.id} className={`rem-card ${idx % 2 === 1 ? 'alt' : ''}`} style={{ opacity: rem.status === 'Off' ? 0.6 : 1 }}>
+                  <span className="corner"></span>
+                  <div className="rem-top">
+                    <p className="rem-title">{rem.title}</p>
+                    <span className={`status-pill ${rem.status === 'Off' ? 'off' : ''}`}>
+                      {rem.status}
+                    </span>
+                  </div>
+                  <div className="rem-meta">
+                    <span>{rem.type}</span>
+                    <span>{formatDate(rem.date)}, {formatTime(rem.time)}</span>
+                    <span>Repeats {rem.repeat}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', fontFamily: 'var(--font-mono)', color: 'var(--ink)', marginTop: '4px', opacity: 0.7 }}>
+                    <span>Method: {rem.method || 'In-app'}</span>
+                  </div>
+                  {rem.notes && <p className="rem-note">{rem.notes}</p>}
+                  
+                  <div className="rem-actions">
+                    <button className="btn-mini primary" onClick={() => handleEditClick(rem)}>Edit</button>
+                    <button className="btn-mini" onClick={() => handleToggleStatus(rem.id)}>
+                      {rem.status === 'Active' ? 'Turn Off' : 'Turn On'}
+                    </button>
+                    <button className="btn-mini danger" onClick={() => handleDeleteTrigger(rem)}>Delete</button>
+                  </div>
+                </div>
+              ))}
+            </>
           )}
         </div>
 
