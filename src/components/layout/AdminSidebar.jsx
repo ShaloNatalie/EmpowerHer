@@ -20,8 +20,7 @@ const AdminSidebar = () => {
     { path: '/admin/content', no: 'A2', label: 'Manage content' },
     { path: '/admin/self-exam-guide', no: 'A3', label: 'Self-exam guide' },
     { path: '/admin/facilities', no: 'A4', label: 'Facilities' },
-    { path: '/admin/settings', no: 'A5', label: 'Admin settings' },
-    { path: '/dashboard', no: '←', label: 'Back to user dashboard' }
+    { path: '/admin/settings', no: 'A5', label: 'Admin settings' }
   ];
 
   return (
