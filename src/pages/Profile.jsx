@@ -1,7 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../firebase/firebase';
 import '../styles/profile.css';
+
+// Simple SHA-256 Hashing helper
+const hashPIN = async (pin) => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pin);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+};
 
 const Profile = () => {
   const { user, logout } = useAuth();
@@ -12,11 +23,11 @@ const Profile = () => {
 
   // Local Profile State (pre-populated with user context or template defaults)
   const [profile, setProfile] = useState({
-    name: user?.name || 'Christine Wachira',
+    name: user?.fullName || user?.name || 'Christine Wachira',
     email: user?.email || 'christine@example.com',
-    ageRange: '18–25',
-    county: 'Nairobi',
-    status: 'Active'
+    ageRange: user?.ageRange || '18–25',
+    county: user?.county || 'Nairobi',
+    status: user?.accountStatus || 'Active'
   });
 
   // Edit form buffer state
@@ -27,28 +38,151 @@ const Profile = () => {
 
   // Privacy Settings Toggles State
   const [privacySettings, setPrivacySettings] = useState({
-    hideSensitive: true,
-    requirePIN: false,
-    keepPrivate: true
+    hideSensitiveInfo: false,
+    requirePinForHistory: false,
+    pinHash: null
   });
+
+  // PIN creation UI State
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [confirmPinInput, setConfirmPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
+
+  // Clear data modal state
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [clearSuccess, setClearSuccess] = useState(false);
 
   // Reminder Settings State
   const [reminderSettings, setReminderSettings] = useState({
     monthlySelfCheck: true,
-    clinicFollowup: false,
+    clinicFollowUp: false,
     preferredTime: '20:00',
-    methods: ['In-app']
+    methods: ['inApp']
   });
 
   // Delete modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
+  // Fetch settings on load
+  useEffect(() => {
+    const fetchUserSettings = async () => {
+      if (!user?.uid) return;
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          if (data.privacySettings) {
+            setPrivacySettings({
+              hideSensitiveInfo: !!data.privacySettings.hideSensitiveInfo,
+              requirePinForHistory: !!data.privacySettings.requirePinForHistory,
+              pinHash: data.privacySettings.pinHash || null
+            });
+          }
+          if (data.reminderSettings) {
+            setReminderSettings({
+              monthlySelfCheck: data.reminderSettings.monthlySelfCheck !== false,
+              clinicFollowUp: !!data.reminderSettings.clinicFollowUp,
+              preferredTime: data.reminderSettings.preferredTime || '20:00',
+              methods: data.reminderSettings.methods || ['inApp']
+            });
+          }
+          setProfile({
+            name: data.fullName || data.name || 'Christine Wachira',
+            email: data.email || 'christine@example.com',
+            ageRange: data.ageRange || '18–25',
+            county: data.county || 'Nairobi',
+            status: data.accountStatus || 'Active'
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching user settings from Firestore:", err);
+      }
+    };
+    fetchUserSettings();
+  }, [user]);
+
   // Switch handlers
-  const handlePrivacyToggle = (key) => {
-    setPrivacySettings(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }));
+  const handlePrivacyToggle = async (key) => {
+    if (!user?.uid) return;
+
+    if (key === 'hideSensitiveInfo') {
+      const newValue = !privacySettings.hideSensitiveInfo;
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        await updateDoc(userRef, {
+          'privacySettings.hideSensitiveInfo': newValue,
+          'privacySettings.updatedAt': serverTimestamp()
+        });
+        setPrivacySettings(prev => ({
+          ...prev,
+          hideSensitiveInfo: newValue
+        }));
+      } catch (err) {
+        console.error("Failed to update hideSensitiveInfo:", err);
+      }
+    } else if (key === 'requirePinForHistory') {
+      if (privacySettings.requirePinForHistory) {
+        // Confirm disabling it
+        const confirmDisable = confirm("Are you sure you want to disable PIN protection for your self-check history?");
+        if (confirmDisable) {
+          try {
+            const userRef = doc(db, 'users', user.uid);
+            await updateDoc(userRef, {
+              'privacySettings.requirePinForHistory': false,
+              'privacySettings.pinHash': null,
+              'privacySettings.updatedAt': serverTimestamp()
+            });
+            setPrivacySettings(prev => ({
+              ...prev,
+              requirePinForHistory: false,
+              pinHash: null
+            }));
+          } catch (err) {
+            console.error("Failed to disable PIN protection:", err);
+          }
+        }
+      } else {
+        // Trigger PIN creation setup modal
+        setPinInput('');
+        setConfirmPinInput('');
+        setPinError('');
+        setShowPinModal(true);
+      }
+    }
+  };
+
+  const handleSavePin = async (e) => {
+    e.preventDefault();
+    if (!user?.uid) return;
+    if (pinInput.length !== 4 || !/^\d+$/.test(pinInput)) {
+      setPinError('PIN must be a 4-digit number.');
+      return;
+    }
+    if (pinInput !== confirmPinInput) {
+      setPinError('PINs do not match. Please try again.');
+      return;
+    }
+
+    try {
+      const hashed = await hashPIN(pinInput);
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        'privacySettings.requirePinForHistory': true,
+        'privacySettings.pinHash': hashed,
+        'privacySettings.updatedAt': serverTimestamp()
+      });
+      setPrivacySettings(prev => ({
+        ...prev,
+        requirePinForHistory: true,
+        pinHash: hashed
+      }));
+      setShowPinModal(false);
+    } catch (err) {
+      console.error("Failed to save PIN:", err);
+      setPinError("An error occurred while saving the PIN.");
+    }
   };
 
   const handleReminderToggle = (key) => {
@@ -89,35 +223,161 @@ const Profile = () => {
     setView('edit');
   };
 
-  const handleSaveChanges = (e) => {
+  const handleSaveChanges = async (e) => {
     e.preventDefault();
-    setProfile(prev => ({
-      ...prev,
-      name: editName,
-      email: editEmail,
-      ageRange: editAgeRange,
-      county: editCounty
-    }));
-    setView('overview');
+    if (!user?.uid) return;
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        fullName: editName,
+        email: editEmail,
+        ageRange: editAgeRange,
+        county: editCounty
+      });
+      setProfile(prev => ({
+        ...prev,
+        name: editName,
+        email: editEmail,
+        ageRange: editAgeRange,
+        county: editCounty
+      }));
+      setView('overview');
+    } catch (err) {
+      console.error("Failed to update profile:", err);
+    }
   };
 
   // Account / Security Actions
   const handleClearData = () => {
-    if (confirm("Clear local app data? This removes cached content stored on this device only.")) {
-      alert("Local data cleared.");
+    setShowClearModal(true);
+  };
+
+  const confirmClearData = async () => {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+      // Try to clear caches safely if window.caches is available
+      if (window.caches) {
+        const keys = await window.caches.keys();
+        await Promise.all(keys.map(key => window.caches.delete(key)));
+      }
+      setShowClearModal(false);
+      setClearSuccess(true);
+    } catch (err) {
+      console.error("Error clearing local data:", err);
+      // Still show success or alert user
+      setShowClearModal(false);
+      setClearSuccess(true);
     }
   };
 
-  const handleUpdateReminders = () => {
-    alert("Reminder preferences updated successfully!");
+  // Change Password UI State
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [showPasswords, setShowPasswords] = useState(false);
+
+  const handleUpdateReminders = async () => {
+    if (!user?.uid) return;
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        reminderSettings: {
+          monthlySelfCheck: !!reminderSettings.monthlySelfCheck,
+          clinicFollowUp: !!reminderSettings.clinicFollowUp,
+          preferredTime: reminderSettings.preferredTime || '20:00',
+          methods: reminderSettings.methods || ['inApp'],
+          updatedAt: serverTimestamp()
+        }
+      });
+      alert("Reminder preferences updated successfully.");
+    } catch (err) {
+      console.error("Failed to update reminder settings:", err);
+      alert("Failed to update reminder preferences. Please try again.");
+    }
   };
 
-  const handleChangePassword = () => {
-    alert("Change password flow triggered (UI placeholder only).");
+  const handleChangePasswordClick = () => {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordError('');
+    setPasswordSuccess(false);
+    setPasswordLoading(false);
+    setShowPasswordModal(true);
   };
 
-  const handleSetPIN = () => {
-    alert("PIN protection setup triggered (UI placeholder only).");
+  const handleSavePassword = async (e) => {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordSuccess(false);
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError("All fields are required.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError("Your new password should be at least 6 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("The new passwords do not match.");
+      return;
+    }
+
+    const { auth } = await import('../firebase/firebase');
+    const currentUser = auth.currentUser;
+    if (!currentUser || !currentUser.email) {
+      setPasswordError("Please log in again before changing your password.");
+      return;
+    }
+
+    setPasswordLoading(true);
+    try {
+      const { EmailAuthProvider, reauthenticateWithCredential, updatePassword } = await import('firebase/auth');
+      
+      // 1. Create credential
+      const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
+      
+      // 2. Reauthenticate
+      try {
+        await reauthenticateWithCredential(currentUser, credential);
+      } catch (authErr) {
+        console.error("Reauthentication failed:", authErr);
+        setPasswordError("The current password you entered is incorrect.");
+        setPasswordLoading(false);
+        return;
+      }
+
+      // 3. Update password
+      try {
+        await updatePassword(currentUser, newPassword);
+        setPasswordSuccess(true);
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setShowPasswordModal(false);
+        alert("Password updated successfully.");
+      } catch (updateErr) {
+        console.error("Update password failed:", updateErr);
+        if (updateErr.code === 'auth/weak-password') {
+          setPasswordError("Your new password should be at least 6 characters.");
+        } else if (updateErr.code === 'auth/requires-recent-login') {
+          setPasswordError("Please log in again before changing your password.");
+        } else {
+          setPasswordError("Could not update your password. Please try again.");
+        }
+      }
+    } catch (err) {
+      console.error("General change password error:", err);
+      setPasswordError("Could not update your password. Please try again.");
+    } finally {
+      setPasswordLoading(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -270,8 +530,8 @@ const Profile = () => {
           <label className="switch">
             <input 
               type="checkbox" 
-              checked={privacySettings.hideSensitive} 
-              onChange={() => handlePrivacyToggle('hideSensitive')} 
+              checked={privacySettings.hideSensitiveInfo} 
+              onChange={() => handlePrivacyToggle('hideSensitiveInfo')} 
             />
             <span className="slider"></span>
           </label>
@@ -284,22 +544,8 @@ const Profile = () => {
           <label className="switch">
             <input 
               type="checkbox" 
-              checked={privacySettings.requirePIN} 
-              onChange={() => handlePrivacyToggle('requirePIN')} 
-            />
-            <span className="slider"></span>
-          </label>
-        </div>
-        <div className="setting-row">
-          <div>
-            <h4>Keep self-check records private</h4>
-            <p>Your records are never shared without your permission.</p>
-          </div>
-          <label className="switch">
-            <input 
-              type="checkbox" 
-              checked={privacySettings.keepPrivate} 
-              onChange={() => handlePrivacyToggle('keepPrivate')} 
+              checked={privacySettings.requirePinForHistory} 
+              onChange={() => handlePrivacyToggle('requirePinForHistory')} 
             />
             <span className="slider"></span>
           </label>
@@ -344,8 +590,8 @@ const Profile = () => {
           <label className="switch">
             <input 
               type="checkbox" 
-              checked={reminderSettings.clinicFollowup} 
-              onChange={() => handleReminderToggle('clinicFollowup')} 
+              checked={reminderSettings.clinicFollowUp} 
+              onChange={() => handleReminderToggle('clinicFollowUp')} 
             />
             <span className="slider"></span>
           </label>
@@ -364,23 +610,23 @@ const Profile = () => {
             <label>
               <input 
                 type="checkbox" 
-                checked={reminderSettings.methods.includes('In-app')} 
-                onChange={() => handleReminderMethodChange('In-app')} 
+                checked={reminderSettings.methods.includes('inApp')} 
+                onChange={() => handleReminderMethodChange('inApp')} 
               /> In-app
             </label>
-            <label>
+            <label style={{ opacity: 0.5, cursor: 'not-allowed' }}>
               <input 
                 type="checkbox" 
-                checked={reminderSettings.methods.includes('Phone notification')} 
-                onChange={() => handleReminderMethodChange('Phone notification')} 
-              /> Phone notification
+                disabled 
+                checked={false} 
+              /> Phone notification (Coming soon)
             </label>
-            <label>
+            <label style={{ opacity: 0.5, cursor: 'not-allowed' }}>
               <input 
                 type="checkbox" 
-                checked={reminderSettings.methods.includes('SMS')} 
-                onChange={() => handleReminderMethodChange('SMS')} 
-              /> SMS
+                disabled 
+                checked={false} 
+              /> SMS (Coming soon)
             </label>
           </div>
         </div>
@@ -403,14 +649,7 @@ const Profile = () => {
             <h4>Change password</h4>
             <p>Update the password you use to sign in.</p>
           </div>
-          <button className="btn-secondary" onClick={handleChangePassword}>Change password</button>
-        </div>
-        <div className="action-row">
-          <div>
-            <h4>PIN protection</h4>
-            <p>Add a short PIN as an extra layer on this device.</p>
-          </div>
-          <button className="btn-secondary" onClick={handleSetPIN}>Set PIN</button>
+          <button className="btn-secondary" onClick={handleChangePasswordClick}>Change password</button>
         </div>
         <div className="action-row">
           <div>
@@ -461,6 +700,128 @@ const Profile = () => {
             <button className="btn-ghost" onClick={() => setShowDeleteModal(false)}>Cancel</button>
             <button className="btn-secondary" style={{ borderColor: 'var(--oxblood)', color: 'var(--oxblood)' }} onClick={handleDeleteAccount}>Delete account</button>
           </div>
+        </div>
+      </div>
+
+      {/* ============ PIN SETUP MODAL ============ */}
+      <div className={`modal-overlay ${showPinModal ? 'show' : ''}`}>
+        <div className="modal">
+          <h4>Set a 4-Digit PIN</h4>
+          <p>This PIN will be required to access your Self-Check History on this device.</p>
+          <form onSubmit={handleSavePin}>
+            <div className="field">
+              <label>Enter 4-Digit PIN</label>
+              <input 
+                type="password" 
+                maxLength={4}
+                pattern="\d{4}"
+                placeholder="••••"
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
+                required
+                style={{ textAlign: 'center', fontSize: '24px', letterSpacing: '8px' }}
+              />
+            </div>
+            <div className="field">
+              <label>Confirm 4-Digit PIN</label>
+              <input 
+                type="password" 
+                maxLength={4}
+                pattern="\d{4}"
+                placeholder="••••"
+                value={confirmPinInput}
+                onChange={(e) => setConfirmPinInput(e.target.value.replace(/\D/g, ''))}
+                required
+                style={{ textAlign: 'center', fontSize: '24px', letterSpacing: '8px' }}
+              />
+            </div>
+            {pinError && <p style={{ color: 'var(--oxblood)', fontSize: '13px', margin: '0 0 16px' }}>{pinError}</p>}
+            <div className="modal-actions">
+              <button type="button" className="btn-ghost" onClick={() => setShowPinModal(false)}>Cancel</button>
+              <button type="submit" className="btn-primary">Save PIN</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* ============ CLEAR DATA CONFIRMATION MODAL ============ */}
+      <div className={`modal-overlay ${showClearModal ? 'show' : ''}`}>
+        <div className="modal">
+          <h4>Clear local app data?</h4>
+          <p>This will clear cached content stored on this device only. Your saved self-check records in your account will not be deleted.</p>
+          <div className="modal-actions">
+            <button className="btn-ghost" onClick={() => setShowClearModal(false)}>Cancel</button>
+            <button className="btn-secondary" onClick={confirmClearData}>Clear data</button>
+          </div>
+        </div>
+      </div>
+
+      {/* ============ CLEAR SUCCESS MODAL ============ */}
+      <div className={`modal-overlay ${clearSuccess ? 'show' : ''}`}>
+        <div className="modal">
+          <h4>Success</h4>
+          <p>Local app data cleared successfully.</p>
+          <div className="modal-actions">
+            <button className="btn-primary" onClick={() => setClearSuccess(false)}>OK</button>
+          </div>
+        </div>
+      </div>
+
+      {/* ============ CHANGE PASSWORD MODAL ============ */}
+      <div className={`modal-overlay ${showPasswordModal ? 'show' : ''}`}>
+        <div className="modal" style={{ maxWidth: '420px' }}>
+          <h4>Change password</h4>
+          <p>Please enter your current password to verify your identity before entering a new password.</p>
+          <form onSubmit={handleSavePassword}>
+            <div className="field">
+              <label>Current password</label>
+              <input 
+                type={showPasswords ? "text" : "password"} 
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                required
+                placeholder="Enter current password"
+              />
+            </div>
+            <div className="field">
+              <label>New password</label>
+              <input 
+                type={showPasswords ? "text" : "password"} 
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                placeholder="At least 6 characters"
+                minLength={6}
+              />
+            </div>
+            <div className="field">
+              <label>Confirm new password</label>
+              <input 
+                type={showPasswords ? "text" : "password"} 
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                placeholder="Re-enter new password"
+                minLength={6}
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px', cursor: 'pointer' }} onClick={() => setShowPasswords(!showPasswords)}>
+              <input 
+                type="checkbox" 
+                checked={showPasswords} 
+                onChange={() => {}} 
+                style={{ cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: '13px', userSelect: 'none' }}>Show passwords</span>
+            </div>
+            {passwordError && <p style={{ color: 'var(--oxblood)', fontSize: '13px', margin: '0 0 16px' }}>{passwordError}</p>}
+            <div className="modal-actions">
+              <button type="button" className="btn-ghost" onClick={() => setShowPasswordModal(false)} disabled={passwordLoading}>Cancel</button>
+              <button type="submit" className="btn-primary" disabled={passwordLoading}>
+                {passwordLoading ? 'Updating...' : 'Update password'}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
 
