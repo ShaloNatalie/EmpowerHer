@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '../../firebase/firebase';
+import { kenyaCounties } from '../../constants/kenyaCounties';
 import '../../styles/admin.css';
 
 const ManageFacilities = () => {
@@ -42,14 +43,7 @@ const ManageFacilities = () => {
   const [adminSettings, setAdminSettings] = useState(null);
 
   // List of Kenya's 47 Counties
-  const countiesList = [
-    "Mombasa", "Kwale", "Kilifi", "Tana River", "Lamu", "Taita Taveta", "Garissa", "Wajir", "Mandera", 
-    "Marsabit", "Isiolo", "Meru", "Tharaka Nithi", "Embu", "Kitui", "Machakos", "Makueni", "Nyandarua", 
-    "Nyeri", "Kirinyaga", "Murang’a", "Kiambu", "Turkana", "West Pokot", "Samburu", "Trans Nzoia", 
-    "Uasin Gishu", "Elgeyo Marakwet", "Nandi", "Baringo", "Laikipia", "Nakuru", "Narok", "Kajiado", 
-    "Kericho", "Bomet", "Kakamega", "Vihiga", "Bungoma", "Busia", "Siaya", "Kisumu", "Homa Bay", 
-    "Migori", "Kisii", "Nyamira", "Nairobi"
-  ];
+  const countiesList = kenyaCounties;
 
   const typesList = ["Public", "Private", "NGO", "Community health centre"];
 
@@ -223,7 +217,7 @@ const ManageFacilities = () => {
   const resetForm = () => {
     setEditingId(null);
     setFormName('');
-    setFormCounty('Mombasa');
+    setFormCounty('');
     setFormType('Public');
     setFormAddress('');
     setFormPhone('');
@@ -372,6 +366,7 @@ const ManageFacilities = () => {
               <div className="field">
                 <label>County / location</label>
                 <select value={formCounty} onChange={(e) => setFormCounty(e.target.value)}>
+                  <option value="" disabled>Select county</option>
                   {countiesList.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>

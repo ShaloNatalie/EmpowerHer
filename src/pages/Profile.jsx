@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase/firebase';
+import { getSelfCheckRecords, clearUserRecords } from '../services/selfCheckService';
+import { kenyaCounties } from '../constants/kenyaCounties';
 import '../styles/profile.css';
 
 // Simple SHA-256 Hashing helper
@@ -63,6 +65,13 @@ const Profile = () => {
 
   // Delete modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTextInput, setDeleteTextInput] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Clear records modal state
+  const [showClearRecordsModal, setShowClearRecordsModal] = useState(false);
 
   // Fetch settings on load
   useEffect(() => {
@@ -387,20 +396,132 @@ const Profile = () => {
     navigate('/');
   };
 
-  const handleExportRecords = () => {
-    alert("Exporting records... Your self-check history will download shortly as a text/CSV report.");
-  };
-
-  const handleClearRecords = () => {
-    if (confirm("Are you sure you want to clear all saved self-check records? This action cannot be undone.")) {
-      alert("All history log records cleared.");
+  const handleExportRecords = async () => {
+    if (!user?.uid) return;
+    try {
+      const records = await getSelfCheckRecords(user.uid);
+      if (!records || records.length === 0) {
+        alert("You do not have any self-check records to export yet.");
+        return;
+      }
+      
+      const csvRows = [];
+      const headers = ['Date', 'Completed guide', 'Side checked', 'Felt normal', 'Changes noticed', 'Notes', 'Reminder requested', 'Created at'];
+      csvRows.push(headers.join(','));
+      
+      records.forEach(rec => {
+        const values = [
+          rec.date || '',
+          rec.completedGuide ? 'Yes' : 'No',
+          rec.sideChecked || '',
+          rec.feltNormal || '',
+          (rec.changesNoticed || []).join('; '),
+          `"${(rec.notes || '').replace(/"/g, '""')}"`, // escape quotes for CSV
+          rec.reminderRequested ? 'Yes' : 'No',
+          rec.createdAt || ''
+        ];
+        csvRows.push(values.join(','));
+      });
+      
+      const csvString = csvRows.join('\n');
+      const blob = new Blob([csvString], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.setAttribute('hidden', '');
+      a.setAttribute('href', url);
+      a.setAttribute('download', 'empowerher-self-check-records.csv');
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      
+      alert("Your records have been exported successfully.");
+    } catch (err) {
+      console.error("Error exporting records:", err);
+      alert("An error occurred while exporting your records.");
     }
   };
 
-  const handleDeleteAccount = () => {
-    setShowDeleteModal(false);
-    alert("Account deletion triggered. You will be logged out.");
-    handleLogout();
+  const confirmClearRecords = async () => {
+    if (!user?.uid) return;
+    try {
+      await clearUserRecords(user.uid);
+      setShowClearRecordsModal(false);
+      alert("Your self-check records have been cleared.");
+    } catch (err) {
+      console.error("Error clearing records:", err);
+      alert("An error occurred while clearing your records.");
+    }
+  };
+
+  const handleDeleteAccountClick = () => {
+    setDeleteTextInput('');
+    setDeletePassword('');
+    setDeleteError('');
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDeleteAccount = async (e) => {
+    e.preventDefault();
+    if (!user?.uid) return;
+    if (deleteTextInput !== 'DELETE') {
+      setDeleteError("Please type DELETE exactly to confirm.");
+      return;
+    }
+    setDeleteLoading(true);
+    setDeleteError('');
+    
+    try {
+      const { auth } = await import('../firebase/firebase');
+      const currentUser = auth.currentUser;
+      if (!currentUser || !currentUser.email) {
+        setDeleteError("For security, please log in again before deleting your account.");
+        setDeleteLoading(false);
+        return;
+      }
+      
+      const { EmailAuthProvider, reauthenticateWithCredential, deleteUser } = await import('firebase/auth');
+      
+      if (deletePassword) {
+        const credential = EmailAuthProvider.credential(currentUser.email, deletePassword);
+        try {
+          await reauthenticateWithCredential(currentUser, credential);
+        } catch (reauthErr) {
+          console.error("Reauth failed during delete:", reauthErr);
+          setDeleteError("Please enter your current password to confirm account deletion.");
+          setDeleteLoading(false);
+          return;
+        }
+      } else {
+        setDeleteError("Please enter your current password to confirm account deletion.");
+        setDeleteLoading(false);
+        return;
+      }
+      
+      // 1. Delete user's self check records
+      await clearUserRecords(user.uid);
+      
+      // 2. Delete user doc
+      await deleteDoc(doc(db, 'users', user.uid));
+      
+      // 3. Delete auth user
+      await deleteUser(currentUser);
+      
+      // 4. Logout
+      if (logout) {
+        await logout();
+      }
+      navigate('/');
+      
+    } catch (err) {
+      console.error("Error deleting account:", err);
+      if (err.code === 'auth/requires-recent-login') {
+        setDeleteError("For security, please log in again before deleting your account.");
+      } else {
+        setDeleteError("An error occurred while deleting your account. Please try again.");
+      }
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   return (
@@ -498,10 +619,8 @@ const Profile = () => {
                 <div className="field">
                   <label>County / location</label>
                   <select value={editCounty} onChange={(e) => setEditCounty(e.target.value)}>
-                    <option value="Nairobi">Nairobi</option>
-                    <option value="Kiambu">Kiambu</option>
-                    <option value="Mombasa">Mombasa</option>
-                    <option value="Other">Other</option>
+                    <option value="" disabled>Select county</option>
+                    {kenyaCounties.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
               </div>
@@ -680,26 +799,68 @@ const Profile = () => {
             <h4>Clear saved self-check records</h4>
             <p>Remove all entries from your History Log. This cannot be undone.</p>
           </div>
-          <button className="btn-secondary" onClick={handleClearRecords}>Clear records</button>
+          <button className="btn-secondary" onClick={() => setShowClearRecordsModal(true)}>Clear records</button>
         </div>
         <div className="action-row danger">
           <div>
             <h4>Delete account</h4>
             <p>Permanently remove your account and saved records.</p>
           </div>
-          <button className="btn-secondary" onClick={() => setShowDeleteModal(true)}>Delete account</button>
+          <button className="btn-secondary" onClick={handleDeleteAccountClick}>Delete account</button>
+        </div>
+      </div>
+
+      {/* ============ CLEAR RECORDS CONFIRMATION MODAL ============ */}
+      <div className={`modal-overlay ${showClearRecordsModal ? 'show' : ''}`}>
+        <div className="modal">
+          <h4>Clear saved self-check records?</h4>
+          <p>This will permanently remove all entries from your History Log. This action cannot be undone.</p>
+          <div className="modal-actions">
+            <button className="btn-ghost" onClick={() => setShowClearRecordsModal(false)}>Cancel</button>
+            <button className="btn-secondary" style={{ borderColor: 'var(--oxblood)', color: 'var(--oxblood)' }} onClick={confirmClearRecords}>Clear records</button>
+          </div>
         </div>
       </div>
 
       {/* ============ DELETE CONFIRMATION MODAL ============ */}
       <div className={`modal-overlay ${showDeleteModal ? 'show' : ''}`}>
-        <div className="modal">
-          <h4>Delete account?</h4>
-          <p>This will remove your account and saved records. This action cannot be undone.</p>
-          <div className="modal-actions">
-            <button className="btn-ghost" onClick={() => setShowDeleteModal(false)}>Cancel</button>
-            <button className="btn-secondary" style={{ borderColor: 'var(--oxblood)', color: 'var(--oxblood)' }} onClick={handleDeleteAccount}>Delete account</button>
-          </div>
+        <div className="modal" style={{ maxWidth: '420px' }}>
+          <h4>Delete your account?</h4>
+          <p>This will permanently remove your EmpowerHer account and saved records. This action cannot be undone.</p>
+          <form onSubmit={handleConfirmDeleteAccount}>
+            <div className="field">
+              <label>Current password</label>
+              <input 
+                type="password" 
+                value={deletePassword} 
+                onChange={(e) => setDeletePassword(e.target.value)} 
+                placeholder="Required for security" 
+                required 
+              />
+            </div>
+            <div className="field">
+              <label>Type DELETE to confirm</label>
+              <input 
+                type="text" 
+                value={deleteTextInput} 
+                onChange={(e) => setDeleteTextInput(e.target.value)} 
+                placeholder="DELETE" 
+                required 
+              />
+            </div>
+            {deleteError && <p style={{ color: 'var(--oxblood)', fontSize: '13px', margin: '0 0 16px' }}>{deleteError}</p>}
+            <div className="modal-actions">
+              <button type="button" className="btn-ghost" onClick={() => setShowDeleteModal(false)} disabled={deleteLoading}>Cancel</button>
+              <button 
+                type="submit" 
+                className="btn-secondary" 
+                style={{ borderColor: 'var(--oxblood)', color: 'var(--oxblood)' }} 
+                disabled={deleteTextInput !== 'DELETE' || deleteLoading}
+              >
+                {deleteLoading ? 'Deleting...' : 'Delete account'}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
 

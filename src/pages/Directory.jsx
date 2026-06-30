@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/firebase';
+import { kenyaCounties } from '../constants/kenyaCounties';
 import '../styles/clinics.css';
 
 const Directory = () => {
@@ -77,8 +78,8 @@ const Directory = () => {
 
   const filteredFacilities = getFilteredFacilities();
 
-  // Unique counties list compiled from live data
-  const countiesList = ['All counties', ...new Set(facilities.map(f => f.county).filter(Boolean))];
+  // Shared county list
+  const countiesList = ['All counties', ...kenyaCounties];
   const typesList = ['All types', 'Public', 'Private', 'NGO', 'Community health centre'];
 
   const handleViewDetails = (facility) => {

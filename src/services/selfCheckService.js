@@ -78,3 +78,21 @@ export const deleteSelfCheckRecord = async (recordId) => {
   const docRef = doc(db, COLLECTION_NAME, recordId);
   await deleteDoc(docRef);
 };
+
+// Clear all records for a specific user
+export const clearUserRecords = async (userId) => {
+  const collectionRef = collection(db, COLLECTION_NAME);
+  const q = query(
+    collectionRef,
+    where('userId', '==', userId)
+  );
+  
+  const querySnapshot = await getDocs(q);
+  const deletePromises = [];
+  querySnapshot.forEach((document) => {
+    const docRef = doc(db, COLLECTION_NAME, document.id);
+    deletePromises.push(deleteDoc(docRef));
+  });
+  
+  await Promise.all(deletePromises);
+};
